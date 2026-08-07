@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "app_config": {
+      "title": "Application Configuration",
+      "description": "Stores global Supabase credentials and settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "anonKey": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "anonKey"
+      ]
+    },
+    "session": {
+      "title": "TwinLink Shared Session Room",
+      "description": "A real-time shared room session",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["code"]
+    },
+    "message": {
+      "title": "TwinLink Room Message",
+      "description": "Chat message inside a shared room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "senderId": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["text", "senderId"]
+    },
+    "presence": {
+      "title": "TwinLink Device Presence",
+      "description": "Device presence heartbeat info",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string" },
+        "lastSeen": { "type": "string" },
+        "joinedAt": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["deviceId"]
+    },
+    "file_item": {
+      "title": "TwinLink Shared Room File",
+      "description": "Uploaded file in room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "filePath": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "fileType": { "type": "string" },
+        "uploadedAt": { "type": "string" },
+        "senderId": { "type": "string" },
+        "downloaded": { "type": "boolean" }
+      },
+      "required": ["filePath", "fileName"]
+    }
+  },
+  "firestore": {
+    "/app_config/{document}": {
+      "schema": "app_config",
+      "description": "App global configuration"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "session",
+      "description": "TwinLink session room"
+    },
+    "/sessions/{sessionId}/messages/{messageId}": {
+      "schema": "message",
+      "description": "TwinLink room messages subcollection"
+    },
+    "/sessions/{sessionId}/presence/{deviceId}": {
+      "schema": "presence",
+      "description": "TwinLink presence subcollection"
+    },
+    "/sessions/{sessionId}/files/{fileId}": {
+      "schema": "file_item",
+      "description": "TwinLink room files subcollection"
+    }
+  }
+}

@@ -57,6 +57,7 @@ interface PresenceItem {
 
 export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOpenHelp }) => {
   const currentDeviceId = getDeviceId();
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState('');
   const [connectedCount, setConnectedCount] = useState<number>(1);
@@ -74,14 +75,26 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Save to recent codes history
+  // Save to recent codes history & ensure anonymous auth
   useEffect(() => {
+    let isMounted = true;
     addRecentCode(roomCode);
-    ensureAnonymousAuth();
+    ensureAnonymousAuth()
+      .then(() => {
+        if (isMounted) setIsAuthReady(true);
+      })
+      .catch((err) => {
+        console.warn('Anonymous auth init error:', err);
+        if (isMounted) setIsAuthReady(true);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [roomCode]);
 
   // 1. Initialize room session & heartbeat
   useEffect(() => {
+    if (!isAuthReady) return;
     let heartbeatTimer: NodeJS.Timeout;
 
     const initSessionAndHeartbeat = async () => {
@@ -131,10 +144,11 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     return () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     };
-  }, [roomCode, currentDeviceId, isHost]);
+  }, [roomCode, currentDeviceId, isHost, isAuthReady]);
 
   // 2. Presence Listener (Count active devices within last 10s)
   useEffect(() => {
+    if (!isAuthReady) return;
     const presenceRef = collection(db, 'sessions', roomCode, 'presence');
 
     const unsubscribe = onSnapshot(
@@ -171,10 +185,11 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     );
 
     return () => unsubscribe();
-  }, [roomCode]);
+  }, [roomCode, isAuthReady]);
 
   // 3. Real-time Messages Listener
   useEffect(() => {
+    if (!isAuthReady) return;
     const messagesQuery = query(
       collection(db, 'sessions', roomCode, 'messages'),
       orderBy('createdAt', 'asc')
@@ -193,15 +208,20 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
         setMessages(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `sessions/${roomCode}/messages`);
+        try {
+          handleFirestoreError(error, OperationType.GET, `sessions/${roomCode}/messages`);
+        } catch (err) {
+          console.error('Handled messages snapshot error:', err);
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [roomCode]);
+  }, [roomCode, isAuthReady]);
 
   // 4. Real-time Room Files Listener
   useEffect(() => {
+    if (!isAuthReady) return;
     const filesQuery = query(
       collection(db, 'sessions', roomCode, 'files'),
       orderBy('uploadedAt', 'desc')
@@ -242,7 +262,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     );
 
     return () => unsubscribe();
-  }, [roomCode]);
+  }, [roomCode, isAuthReady]);
 
   // Auto-scroll on new message
   useEffect(() => {

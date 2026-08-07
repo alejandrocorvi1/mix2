@@ -41,8 +41,9 @@ export function ensureAnonymousAuth(): Promise<any> {
   return authInitPromise;
 }
 
-// Immediately trigger auth check
+// Immediately trigger auth check and connection check
 ensureAnonymousAuth();
+testFirestoreConnection();
 
 // Connection check
 export async function testFirestoreConnection() {

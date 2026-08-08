@@ -723,25 +723,6 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
 
       {/* Container 2: Integrated Shared Files for the Room */}
       <div className="space-y-6 pt-4 border-t border-slate-800/80">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <FolderOpen className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>Archivos Compartidos de la Sala</span>
-                <span className="text-xs font-mono font-normal text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
-                  {roomCode}
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Los archivos que subas aquí se sincronizarán en tiempo real solo con los participantes de esta sala.
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* File Uploader linked to Room */}
         <FileUploader
           onUploadSuccess={handleFileUploadSuccess}

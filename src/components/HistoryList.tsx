@@ -17,8 +17,56 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   onItemDownloaded,
 }) => {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadingIndex, setDownloadingIndex] = useState(0);
 
   if (files.length === 0) return null;
+
+  const handleDownloadAllAndDestroy = async () => {
+    if (files.length === 0 || isDownloadingAll) return;
+
+    setIsDownloadingAll(true);
+    setDownloadingIndex(0);
+
+    const filesToDownload = [...files];
+
+    for (let i = 0; i < filesToDownload.length; i++) {
+      const file = filesToDownload[i];
+      setDownloadingIndex(i);
+
+      try {
+        const result = await downloadAndRemoveFromSupabase(file.filePath, file.fileName);
+        if (result.success && result.blob) {
+          const url = window.URL.createObjectURL(result.blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = file.fileName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }, 1000);
+
+          if (onItemDownloaded) {
+            await onItemDownloaded(file.filePath, file.id);
+          }
+        } else {
+          console.warn(`Error al descargar ${file.fileName}:`, result.error);
+        }
+      } catch (err: any) {
+        console.error(`Error procesando descarga de ${file.fileName}:`, err);
+      }
+
+      if (i < filesToDownload.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
+
+    setIsDownloadingAll(false);
+    setDownloadingIndex(0);
+  };
 
   const handleDownloadAndDestroy = async (file: UploadedFileInfo) => {
     setDownloadingId(file.id);
@@ -56,7 +104,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-orange-400" />
-          <h3 className="font-bold text-white text-base">Archivos Subidos en esta Sesión</h3>
+          <h3 className="font-bold text-white text-base">Archivos Subidos</h3>
           <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
             {files.length}
           </span>
@@ -116,6 +164,34 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           );
         })}
       </div>
+
+      {/* Botón inferior para descargar y eliminar todos los archivos */}
+      {files.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-slate-800/80">
+          <button
+            type="button"
+            onClick={handleDownloadAllAndDestroy}
+            disabled={isDownloadingAll || downloadingId !== null}
+            className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold text-sm shadow-xl shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-60"
+          >
+            {isDownloadingAll ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Descargando {downloadingIndex + 1} de {files.length}...</span>
+              </>
+            ) : (
+              <>
+                <Flame className="w-4 h-4 fill-slate-950" />
+                <span>
+                  {files.length === 1
+                    ? 'Descargar y Eliminar 1 archivo'
+                    : `Descargar y Eliminar (${files.length} archivos)`}
+                </span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
     </div>
   );

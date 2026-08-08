@@ -1,12 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with specific database ID if present
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+// Initialize Firestore with long polling auto-detection for cloud containers
+const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true
+}, databaseId);
 
 const APP_CONFIG_DOC = doc(db, 'app_config', 'supabase');
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Upload, File, AlertCircle, Loader2, HardDriveUpload, PlusCircle, HelpCircle, ShieldAlert, Copy, Check, Trash2, X, Plus } from 'lucide-react';
-import { uploadToSupabaseBucket, tryCreateTempFilesBucket } from '../supabaseClient';
+import { Upload, File, AlertCircle, Loader2, HardDriveUpload, PlusCircle, HelpCircle, ShieldAlert, Copy, Check, Trash2, X, Plus, Flame, Download } from 'lucide-react';
+import { uploadToSupabaseBucket, tryCreateTempFilesBucket, downloadAndRemoveFromSupabase } from '../supabaseClient';
 import { formatFileSize, getFileExtensionColor } from '../utils/formatters';
 import { UploadedFileInfo } from '../types';
 
@@ -29,7 +29,10 @@ const createChunkFile = (blob: Blob, name: string, lastModified: number, mimeTyp
   return fileBlob as unknown as File;
 };
 
-export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess, onOpenHelp }) => {
+export const FileUploader: React.FC<FileUploaderProps> = ({
+  onUploadSuccess,
+  onOpenHelp,
+}) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -497,9 +500,12 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
             onClick={handleUpload}
             className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold text-sm shadow-xl shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
           >
-            {selectedFiles.length === 1
-              ? 'Subir 1 archivo'
-              : `Subir ${selectedFiles.length} archivos`}
+            <Upload className="w-4 h-4" />
+            <span>
+              {selectedFiles.length === 1
+                ? 'Subir 1 archivo'
+                : `Subir ${selectedFiles.length} archivos`}
+            </span>
           </button>
         </div>
       )}

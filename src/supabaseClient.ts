@@ -274,35 +274,68 @@ export async function downloadAndRemoveFromSupabase(
   }
 
   try {
-    // 1. Descargar el archivo desde el bucket "temp-files"
-    const { data: blobData, error: downloadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .download(filePath);
+    let blobData: Blob | null = null;
+    let downloadErrorMsg: string | null = null;
 
-    if (downloadError) {
-      console.error('Error al descargar de Supabase Storage:', downloadError);
-      return {
-        success: false,
-        error: `No se pudo descargar el archivo: ${downloadError.message}. Es posible que ya haya sido eliminado.`
-      };
+    // 1. Intentar descargar mediante SDK de Supabase
+    try {
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .download(filePath);
+
+      if (error) {
+        downloadErrorMsg = error.message;
+      } else if (data) {
+        blobData = data;
+      }
+    } catch (sdkErr: any) {
+      downloadErrorMsg = sdkErr?.message || 'Error de conexión';
+    }
+
+    // 2. Fallback: Si .download() falla (ej. por CORS o "Failed to fetch"), intentar fetch directo desde la URL pública
+    if (!blobData) {
+      const publicUrl = getSupabasePublicUrl(filePath);
+      if (publicUrl) {
+        try {
+          const res = await fetch(publicUrl);
+          if (res.ok) {
+            blobData = await res.blob();
+          }
+        } catch (fetchErr) {
+          console.warn('Fallback public URL fetch también falló:', fetchErr);
+        }
+      }
+    }
+
+    // 3. Verificación secundaria en mockStorage por si se subió en modo simulación
+    if (!blobData && mockStorage.has(filePath)) {
+      const mockData = mockStorage.get(filePath);
+      if (mockData) {
+        blobData = new Blob([mockData.file], { type: mockData.file.type });
+        mockStorage.delete(filePath);
+      }
     }
 
     if (!blobData) {
       return {
         success: false,
-        error: 'El archivo descargado está vacío o no fue encontrado.'
+        error: `No se pudo descargar el archivo (${downloadErrorMsg || 'Error de red o archivo inexistente'}). Es posible que las credenciales de Supabase sean incorrectas o que el archivo haya expirado.`
       };
     }
 
-    // 2. REQUISITO 3: Eliminar inmediatamente el archivo del bucket de Supabase usando remove()
-    const { error: removeError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([filePath]);
+    // 4. REQUISITO 3: Eliminar inmediatamente el archivo del bucket de Supabase usando remove()
+    try {
+      const { error: removeError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([filePath]);
 
-    if (removeError) {
-      console.warn('Advertencia: El archivo se descargó pero falló la eliminación con remove():', removeError.message);
-    } else {
-      console.log(`✅ Archivo '${filePath}' eliminado exitosamente de Supabase Storage con remove()`);
+      if (removeError) {
+        console.warn('Advertencia: El archivo se descargó pero falló la eliminación con remove():', removeError.message);
+      } else {
+        console.log(`✅ Archivo '${filePath}' eliminado exitosamente de Supabase Storage con remove()`);
+      }
+    } catch (rmErr) {
+      console.warn('Excepción al eliminar archivo:', rmErr);
     }
 
     return {

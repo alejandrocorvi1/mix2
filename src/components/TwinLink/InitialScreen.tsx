@@ -85,11 +85,13 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
     <div className="w-full max-w-lg mx-auto space-y-6 animate-fadeIn">
       {/* Header Branding */}
       <div className="text-center space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-          Twin<span className="text-cyan-400">Link</span>
+        <h1 className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-md">
+          <span className="bg-gradient-to-r from-blue-600 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+            TwinLink
+          </span>
         </h1>
-        <p className="text-slate-400 text-sm max-w-sm mx-auto">
-          Conecta tus dispositivos al instante con un código único sin registros ni descargas.
+        <p className="text-slate-400 text-sm max-w-sm mx-auto font-bold italic">
+          By Ale Corvi
         </p>
       </div>
 
@@ -196,7 +198,7 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
 
       {/* Info Card: ¿Cómo funciona TwinLink? */}
       <div className="bg-[#0b101d]/60 border border-slate-800/60 rounded-2xl p-6 space-y-4">
-        <h3 className="text-base font-bold text-white flex items-center gap-2">
+        <h3 className="text-base font-bold text-white flex items-center justify-center text-center gap-2">
           <Smartphone className="w-4 h-4 text-cyan-400" />
           ¿Cómo funciona TwinLink?
         </h3>

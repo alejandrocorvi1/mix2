@@ -464,17 +464,19 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     <div className="w-full max-w-4xl mx-auto space-y-8 animate-fadeIn">
       {/* Container 1: Real-time Chat Box */}
       <div className="bg-[#0b101d] border border-slate-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[520px]">
-        {/* Header Superior del Chat */}
-        <header className="px-4 py-3 sm:px-6 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-10">
-          {/* Left: Exit & Room Code Badge */}
-          <div className="flex items-center gap-2 sm:gap-3">
+        {/* Header Superior del Chat (Panel de Comandos) */}
+        
+        {/* Version PC (md y superior) - Sin Modificaciones */}
+        <header className="hidden md:flex px-6 py-3 bg-slate-900/90 border-b border-slate-800 items-center justify-between gap-3 sticky top-0 z-10">
+          {/* Left: Exit, Room Code, Live Presence */}
+          <div className="flex items-center gap-3">
             <button
               onClick={onExit}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
               title="Salir de la sala"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Salir</span>
+              <span>Salir</span>
             </button>
 
             {/* Room Code Badge */}
@@ -513,27 +515,6 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
           {/* Right Actions Bar */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsQRModalOpen(true)}
-              className="p-2 text-slate-300 hover:text-cyan-400 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors"
-              title="Mostrar Código QR"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={handleCopyLink}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl transition-colors"
-              title="Copiar enlace directo"
-            >
-              {copiedLink ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Share2 className="w-3.5 h-3.5 text-cyan-400" />
-              )}
-              <span className="hidden md:inline">Enlace</span>
-            </button>
-
-            <button
               onClick={handleCopyAllChat}
               disabled={messages.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/60 rounded-xl transition-colors"
@@ -564,6 +545,93 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
               title="Borrar mensajes del chat"
             >
               <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
+
+        {/* Version Celular Móvil (debajo de md) */}
+        <header className="flex md:hidden flex-col gap-2.5 px-3 py-2.5 bg-slate-900/90 border-b border-slate-800 sticky top-0 z-10">
+          {/* Linea Superior: Salir de sala (Izquierda) | Número de sala (Centro) | Status (Derecha) */}
+          <div className="grid grid-cols-3 items-center w-full">
+            {/* Margen Izquierdo: Salir de sala */}
+            <div className="flex justify-start">
+              <button
+                onClick={onExit}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
+                title="Salir de la sala"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-xs">Salir</span>
+              </button>
+            </div>
+
+            {/* Centro de la Pantalla: Número de sala */}
+            <div className="flex justify-center">
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 border border-cyan-500/30 hover:border-cyan-500/60 rounded-xl transition-all group"
+                title="Copiar código de la sala"
+              >
+                <span className="text-xs font-mono font-bold text-cyan-400 group-hover:text-cyan-300 tracking-wider">
+                  {roomCode}
+                </span>
+                {copiedCode ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3 text-slate-400 group-hover:text-cyan-400" />
+                )}
+              </button>
+            </div>
+
+            {/* Margen Derecho: Status de conexión */}
+            <div className="flex justify-end">
+              {connectedCount > 1 ? (
+                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-[11px] font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>En Vivo</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/80 border border-slate-700/60 text-slate-400 rounded-full text-[11px] font-medium">
+                  <span className="h-2 w-2 rounded-full bg-slate-500"></span>
+                  <span>Offline</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Linea Inferior Móvil: Acciones de chat */}
+          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/50">
+            <button
+              onClick={handleCopyAllChat}
+              disabled={messages.length === 0}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 active:bg-slate-700 disabled:opacity-40 border border-slate-700/60 rounded-xl transition-colors"
+              title="Copiar todo el chat"
+            >
+              {copiedChat ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-300" />}
+              <span>Copiar</span>
+            </button>
+
+            <button
+              onClick={handleDownloadTxt}
+              disabled={messages.length === 0}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 active:bg-slate-700 disabled:opacity-40 border border-slate-700/60 rounded-xl transition-colors"
+              title="Descargar historial en .txt"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Descargar</span>
+            </button>
+
+            <button
+              onClick={() => setIsConfirmDeleteOpen(true)}
+              disabled={messages.length === 0}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-rose-400 bg-slate-800/80 active:bg-slate-700 disabled:opacity-40 border border-slate-700/60 rounded-xl transition-colors"
+              title="Borrar mensajes del chat"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Borrar</span>
             </button>
           </div>
         </header>

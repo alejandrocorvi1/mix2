@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient filling 100% full bleed -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1329"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Glowing Cyan/Blue Brand Gradient -->
+    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.1"/>
+    </linearGradient>
+
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- 100% Edge-to-Edge Full Bleed Background Rect -->
+  <rect width="512" height="512" fill="url(#bgGrad)" />
+
+  <!-- Ambient background glow behind symbol -->
+  <circle cx="256" cy="256" r="180" fill="url(#glowGrad)" />
+
+  <!-- Safe Zone Maskable Icon Content (Centered within inner 80%) -->
+  <g transform="translate(256, 256)">
+    <!-- Interconnected Twin Rings / Orbit -->
+    <circle cx="0" cy="0" r="120" fill="none" stroke="url(#cyanBlue)" stroke-width="8" stroke-dasharray="18 12" opacity="0.6" />
+    <circle cx="0" cy="0" r="145" fill="none" stroke="#06b6d4" stroke-width="3" opacity="0.25" />
+
+    <!-- Twin Nodes -->
+    <circle cx="-85" cy="-60" r="22" fill="url(#cyanBlue)" filter="url(#glow)" />
+    <circle cx="85" cy="60" r="22" fill="url(#cyanBlue)" filter="url(#glow)" />
+
+    <!-- Connecting Link Line -->
+    <line x1="-85" y1="-60" x2="85" y2="60" stroke="url(#cyanBlue)" stroke-width="12" stroke-linecap="round" opacity="0.8" />
+
+    <!-- Central Zap Lightning Bolt Emblem -->
+    <path d="M12 -90 L-50 10 L-5 10 L-20 90 L50 -10 L5 -10 Z" fill="url(#cyanBlue)" filter="url(#glow)" />
+    <path d="M10 -80 L-42 10 L-5 10 L-18 80 L42 -10 L5 -10 Z" fill="#ffffff" opacity="0.9" />
+  </g>
+</svg>

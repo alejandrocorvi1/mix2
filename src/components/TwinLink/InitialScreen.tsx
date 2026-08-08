@@ -82,13 +82,9 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-8 animate-fadeIn">
+    <div className="w-full max-w-lg mx-auto space-y-6 animate-fadeIn">
       {/* Header Branding */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold tracking-wide uppercase">
-          <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-          <span>Sincronización en Tiempo Real</span>
-        </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
           Twin<span className="text-cyan-400">Link</span>
         </h1>

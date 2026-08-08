@@ -5,7 +5,7 @@ import { InstructionsModal } from './components/InstructionsModal';
 import { InitialScreen } from './components/TwinLink/InitialScreen';
 import { SharedPanel } from './components/TwinLink/SharedPanel';
 import { normalizeRoomCode } from './lib/device';
-import { Settings, Zap, Radio } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 export default function App() {
   // Direct Download Page state (if opening legacy file URL)
@@ -70,42 +70,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
       
-      {/* Top Header Bar */}
-      <header className="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          
-          {/* Logo / Title */}
-          <div 
-            onClick={handleExitTwinLinkRoom}
-            className="flex items-center gap-2.5 cursor-pointer group"
-          >
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-lg font-extrabold tracking-tight text-white">
-                Twin<span className="text-cyan-400">Link</span>
-              </span>
-              <span className="block text-[10px] text-slate-400 font-mono -mt-1">
-                Sala Compartida en Tiempo Real
-              </span>
-            </div>
-          </div>
-
-          {/* Right Controls */}
-          <div className="flex items-center gap-3">
-            {activeRoomCode && (
-              <div className="flex items-center gap-2 text-xs font-mono font-semibold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1.5 rounded-xl">
-                <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
-                <span>Sala {activeRoomCode}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col justify-center">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col justify-center">
         
         {downloadTarget ? (
           /* Vista de Descarga Directa desde Enlace */

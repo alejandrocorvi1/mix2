@@ -219,13 +219,17 @@ export async function uploadToSupabaseBucket(file: File): Promise<{
     };
   } catch (err: any) {
     console.error('Excepción al subir a Supabase:', err);
+    let errMsg = err?.message || 'Error de conexión con Supabase';
+    if (errMsg.toLowerCase().includes('failed to fetch') || errMsg.toLowerCase().includes('networkerror')) {
+      errMsg = 'No se pudo conectar con el servidor de Supabase (Failed to fetch). Revisa que la URL y la Clave Anónima (Anon Key) en "Configurar Credenciales" sean correctas y que la URL incluya https://.';
+    }
     return {
       success: false,
       filePath: '',
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
-      error: err.message || 'Error de conexión con Supabase'
+      error: errMsg
     };
   }
 }

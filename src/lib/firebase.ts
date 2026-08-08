@@ -41,18 +41,15 @@ export function ensureAnonymousAuth(): Promise<any> {
   return authInitPromise;
 }
 
-// Immediately trigger auth check and connection check
+// Immediately trigger auth check
 ensureAnonymousAuth();
-testFirestoreConnection();
 
-// Connection check
+// Optional connection check
 export async function testFirestoreConnection() {
   try {
     await getDocFromServer(doc(db, 'app_config', 'test_connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('offline')) {
-      console.warn('Firestore connectivity check: client offline or long polling active.');
-    }
+    console.warn('Firestore connectivity status:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -76,6 +73,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
+  return errInfo;
 }

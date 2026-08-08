@@ -9,6 +9,26 @@ interface FileUploaderProps {
   onOpenHelp?: () => void;
 }
 
+const MAX_FILE_SIZE_BYTES = 49 * 1024 * 1024; // 49 MB
+
+const createChunkFile = (blob: Blob, name: string, lastModified: number, mimeType: string): File => {
+  const fileType = mimeType || 'application/octet-stream';
+  try {
+    if (typeof File === 'function') {
+      return new File([blob], name, {
+        type: fileType,
+        lastModified: lastModified || Date.now(),
+      });
+    }
+  } catch (e) {
+    // Fallback for browser environments where File constructor fails
+  }
+  const fileBlob = new Blob([blob], { type: fileType });
+  Object.defineProperty(fileBlob, 'name', { value: name, writable: false, configurable: true });
+  Object.defineProperty(fileBlob, 'lastModified', { value: lastModified || Date.now(), writable: false, configurable: true });
+  return fileBlob as unknown as File;
+};
+
 export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess, onOpenHelp }) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -16,6 +36,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess, onO
   const [currentUploadingIndex, setCurrentUploadingIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [splitNotice, setSplitNotice] = useState<string | null>(null);
   const [isBucketError, setIsBucketError] = useState(false);
   const [isRlsError, setIsRlsError] = useState(false);
   const [isCreatingBucket, setIsCreatingBucket] = useState(false);
@@ -49,9 +70,49 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
   const addFiles = (incomingFiles: FileList | File[]) => {
     const incoming = Array.from(incomingFiles);
     if (incoming.length === 0) return;
+
+    let splitCount = 0;
+    const processedFiles: File[] = [];
+
+    incoming.forEach((file) => {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        splitCount++;
+        const totalParts = Math.ceil(file.size / MAX_FILE_SIZE_BYTES);
+        const lastDot = file.name.lastIndexOf('.');
+        const nameWithoutExt = lastDot > 0 ? file.name.substring(0, lastDot) : file.name;
+        const ext = lastDot > 0 ? file.name.substring(lastDot) : '';
+
+        for (let i = 0; i < totalParts; i++) {
+          const start = i * MAX_FILE_SIZE_BYTES;
+          const end = Math.min(file.size, (i + 1) * MAX_FILE_SIZE_BYTES);
+          const chunkBlob = file.slice(start, end, file.type);
+          const partFileName = `${nameWithoutExt} (Parte ${i + 1} de ${totalParts})${ext}`;
+          const partFile = createChunkFile(
+            chunkBlob,
+            partFileName,
+            file.lastModified,
+            file.type || 'application/octet-stream'
+          );
+          processedFiles.push(partFile);
+        }
+      } else {
+        processedFiles.push(file);
+      }
+    });
+
+    if (splitCount > 0) {
+      setSplitNotice(
+        `Se evaluó el tamaño del archivo: ${
+          splitCount === 1
+            ? '1 archivo superaba los 49 MB y ha sido dividido automáticamente en partes.'
+            : `${splitCount} archivos superaban los 49 MB y han sido divididos automáticamente en partes.`
+        }`
+      );
+    }
+
     setSelectedFiles((prev) => {
       const existingKeys = new Set(prev.map((f) => `${f.name}-${f.size}`));
-      const newUnique = incoming.filter((f) => !existingKeys.has(`${f.name}-${f.size}`));
+      const newUnique = processedFiles.filter((f) => !existingKeys.has(`${f.name}-${f.size}`));
       return [...prev, ...newUnique];
     });
     setErrorMessage(null);
@@ -96,6 +157,7 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
     setSelectedFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setErrorMessage(null);
+    setSplitNotice(null);
   };
 
   const handleUpload = async () => {
@@ -220,8 +282,28 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
           <p className="text-xs text-slate-500 mt-1">
             Puedes seleccionar varios archivos simultáneamente (documentos, imágenes, videos, comprimidos)
           </p>
+          <p className="text-[11px] text-cyan-400/90 font-medium mt-2 bg-cyan-950/40 border border-cyan-500/20 px-3 py-1 rounded-full inline-block">
+            ⚡ Los archivos mayores a 49 MB se dividen automáticamente en partes antes de subir
+          </p>
         </div>
       </div>
+
+      {/* Split Notice Banner */}
+      {splitNotice && (
+        <div className="mt-4 p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <PlusCircle className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>{splitNotice}</span>
+          </div>
+          <button
+            onClick={() => setSplitNotice(null)}
+            className="text-cyan-400 hover:text-white p-1 rounded-lg hover:bg-cyan-900/50"
+            title="Cerrar aviso"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Selected Files List */}
       {selectedFiles.length > 0 && (

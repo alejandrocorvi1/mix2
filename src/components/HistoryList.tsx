@@ -11,6 +11,51 @@ interface HistoryListProps {
   onItemDownloaded?: (filePath: string, fileId: string) => void;
 }
 
+// Helpers para guardar y recuperar el handle de la carpeta fija en IndexedDB
+const IDB_NAME = 'twinlink_idb';
+const IDB_STORE = 'settings';
+
+async function saveStoredDirectoryHandle(handle: any) {
+  try {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(handle, 'fixed_dir_handle');
+    };
+  } catch (e) {
+    console.warn('Error guardando handle en IndexedDB:', e);
+  }
+}
+
+async function getStoredDirectoryHandle(): Promise<any | null> {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          resolve(null);
+          return;
+        }
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const getReq = tx.objectStore(IDB_STORE).get('fixed_dir_handle');
+        getReq.onsuccess = () => resolve(getReq.result || null);
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export const HistoryList: React.FC<HistoryListProps> = ({
   files,
   onClearHistory,
@@ -26,7 +71,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       const saved = localStorage.getItem('twinlink_download_mode');
       if (saved === 'fixed' || saved === 'ask') return saved;
     }
-    return 'fixed';
+    return 'ask';
   });
 
   // State para notificar al usuario si el navegador bloquea showDirectoryPicker por estar dentro de un iframe
@@ -38,6 +83,18 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   // Detección de soporte para File System Access API (no soportado en Safari / iOS / Apple)
   const isFileSystemAccessSupported = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
+  // Restaurar handle de carpeta fija guardado al cargar el componente
+  useEffect(() => {
+    if (isFileSystemAccessSupported) {
+      getStoredDirectoryHandle().then((handle) => {
+        if (handle) {
+          setFixedDirHandle(handle);
+        }
+      });
+    }
+  }, [isFileSystemAccessSupported]);
+
+  // Persistir la preferencia de modo de descarga siempre que cambie
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('twinlink_download_mode', downloadMode);
@@ -55,14 +112,17 @@ export const HistoryList: React.FC<HistoryListProps> = ({
         mode: 'readwrite',
       });
       setFixedDirHandle(handle);
+      saveStoredDirectoryHandle(handle);
       setDownloadMode('fixed');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('twinlink_download_mode', 'fixed');
+      }
     } catch (err: any) {
       if (err.name === 'AbortError') {
         // Usuario canceló deliberadamente el selector
         return;
       }
       console.warn('Error/Restricción al abrir el selector de carpetas:', err);
-      // Si el navegador bloquea la llamada por ejecutarse dentro de un iframe/subframe
       if (err.name === 'SecurityError' || (typeof window !== 'undefined' && window.self !== window.top)) {
         setIframeNotice(true);
       }
@@ -71,6 +131,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
   const handleSelectFixedMode = async () => {
     setDownloadMode('fixed');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('twinlink_download_mode', 'fixed');
+    }
     if (!fixedDirHandle && isFileSystemAccessSupported) {
       await handlePickFixedFolder();
     }
@@ -78,6 +141,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
   const handleSelectAskMode = () => {
     setDownloadMode('ask');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('twinlink_download_mode', 'ask');
+    }
     setIframeNotice(false);
   };
 
@@ -89,27 +155,59 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
     let targetDirHandle: any = null;
 
-    // Solo si estamos en modo 'fixed' y el navegador soporta File System Access API
-    if (downloadMode === 'fixed' && isFileSystemAccessSupported) {
-      if (fixedDirHandle) {
-        targetDirHandle = fixedDirHandle;
-      } else {
+    // Si el navegador soporta File System Access API
+    if (isFileSystemAccessSupported) {
+      if (downloadMode === 'fixed') {
+        if (fixedDirHandle) {
+          targetDirHandle = fixedDirHandle;
+          // Verificar / pedir permisos para la carpeta recuperada
+          try {
+            if (typeof targetDirHandle.queryPermission === 'function') {
+              let status = await targetDirHandle.queryPermission({ mode: 'readwrite' });
+              if (status !== 'granted' && typeof targetDirHandle.requestPermission === 'function') {
+                status = await targetDirHandle.requestPermission({ mode: 'readwrite' });
+              }
+              if (status !== 'granted') {
+                // Si se deniega el permiso, pedir seleccionar carpeta de nuevo
+                targetDirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+                setFixedDirHandle(targetDirHandle);
+                saveStoredDirectoryHandle(targetDirHandle);
+              }
+            }
+          } catch (pErr) {
+            console.warn('Error al solicitar permiso para la carpeta fija:', pErr);
+          }
+        } else {
+          try {
+            targetDirHandle = await (window as any).showDirectoryPicker({
+              mode: 'readwrite',
+            });
+            setFixedDirHandle(targetDirHandle);
+            saveStoredDirectoryHandle(targetDirHandle);
+          } catch (err: any) {
+            if (err.name === 'AbortError') {
+              return;
+            }
+            console.warn('Acceso a carpeta restringido en este entorno. Se usará descarga estándar.', err);
+            targetDirHandle = null;
+          }
+        }
+      } else if (downloadMode === 'ask') {
+        // En modo "Preguntar siempre", se abre la ventana del navegador para elegir la carpeta cada vez que se presiona el botón
         try {
           targetDirHandle = await (window as any).showDirectoryPicker({
             mode: 'readwrite',
           });
-          setFixedDirHandle(targetDirHandle);
         } catch (err: any) {
           if (err.name === 'AbortError') {
-            // Usuario canceló deliberadamente el diálogo de carpeta
+            // Si el usuario cancela la selección de carpeta, abortamos el proceso
             return;
           }
-          console.warn('Acceso a carpeta restringido en este entorno (ej. iframe). Se usará descarga estándar del navegador.', err);
+          console.warn('Acceso a carpeta restringido o cancelado. Usando descarga por defecto.', err);
           targetDirHandle = null;
         }
       }
     }
-    // En modo 'ask' (Preguntar siempre), NO se abre carpeta fija. Se usa la descarga nativa del navegador.
 
     setIsDownloadingAll(true);
     setDownloadingIndex(0);

@@ -516,9 +516,9 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
       {/* Contenedor 1: Barra de Control de la Sala / App General */}
       <div className="bg-[#0b101d] border border-slate-800/90 rounded-2xl p-3 sm:px-6 sm:py-3.5 shadow-xl">
         {/* Version PC (md y superior) */}
-        <div className="hidden md:flex items-center justify-between gap-3">
-          {/* Left: Exit, Room Code */}
-          <div className="flex items-center gap-3">
+        <div className="hidden md:grid grid-cols-3 items-center gap-3 w-full">
+          {/* Left: Exit */}
+          <div className="flex justify-start">
             <button
               onClick={handleExitRoom}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
@@ -527,8 +527,10 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
               <LogOut className="w-3.5 h-3.5 text-rose-400" />
               <span>Salir</span>
             </button>
+          </div>
 
-            {/* Room Code Badge */}
+          {/* Center: Room Code Badge */}
+          <div className="flex justify-center">
             <button
               onClick={handleCopyCode}
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-950 border border-cyan-500/30 hover:border-cyan-500/60 rounded-xl transition-all group"
@@ -546,7 +548,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
           </div>
 
           {/* Right: Live Presence Badge */}
-          <div>
+          <div className="flex justify-end">
             {connectedCount > 1 ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-xs font-medium">
                 <span className="relative flex h-2 w-2">
@@ -606,9 +608,9 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
       <div className="bg-[#0b101d] border border-slate-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[520px]">
         {/* Header Integrado del Panel de Texto */}
         <header className="px-3 sm:px-6 py-2.5 sm:py-3 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs sm:text-sm font-semibold text-slate-200">
+          <div className="flex items-center justify-center sm:justify-start gap-2">
+            <MessageSquare className="hidden sm:block w-4 h-4 text-cyan-400" />
+            <span className="text-xs sm:text-sm font-semibold text-slate-200 text-center sm:text-left">
               Panel de Texto
             </span>
           </div>

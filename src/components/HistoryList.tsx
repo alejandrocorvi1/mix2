@@ -16,7 +16,6 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   onClearHistory,
   onItemDownloaded,
 }) => {
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState(0);
 
@@ -68,36 +67,6 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     setDownloadingIndex(0);
   };
 
-  const handleDownloadAndDestroy = async (file: UploadedFileInfo) => {
-    setDownloadingId(file.id);
-    try {
-      const result = await downloadAndRemoveFromSupabase(file.filePath, file.fileName);
-      if (result.success && result.blob) {
-        const url = window.URL.createObjectURL(result.blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = file.fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        }, 1000);
-
-        if (onItemDownloaded) {
-          onItemDownloaded(file.filePath, file.id);
-        }
-      } else {
-        alert(result.error || 'No se pudo descargar el archivo.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Error al descargar y autodestruir el archivo');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mt-8">
       
@@ -124,7 +93,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           return (
             <div
               key={file.id}
-              className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition flex flex-col md:flex-row md:items-center justify-between gap-3"
+              className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`p-2.5 rounded-xl border shrink-0 ${getFileExtensionColor(file.fileName)}`}>
@@ -139,27 +108,6 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                   </div>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 self-end md:self-center shrink-0">
-                <button
-                  onClick={() => handleDownloadAndDestroy(file)}
-                  disabled={downloadingId === file.id}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-orange-500/10 disabled:opacity-50"
-                  title="Descargar archivo y autodestruir inmediatamente de Supabase"
-                >
-                  {downloadingId === file.id ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Descargando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Flame className="w-3.5 h-3.5 fill-slate-950" />
-                      <span>Descargar y Eliminar</span>
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           );
         })}
@@ -171,7 +119,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
           <button
             type="button"
             onClick={handleDownloadAllAndDestroy}
-            disabled={isDownloadingAll || downloadingId !== null}
+            disabled={isDownloadingAll}
             className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold text-sm shadow-xl shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-60"
           >
             {isDownloadingAll ? (

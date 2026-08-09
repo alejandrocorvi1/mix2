@@ -17,12 +17,17 @@ const IDB_STORE = 'settings';
 
 async function saveStoredDirectoryHandle(handle: any) {
   try {
+    if (typeof window === 'undefined' || !('indexedDB' in window)) return;
     const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(IDB_STORE);
+    req.onupgradeneeded = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
     };
-    req.onsuccess = () => {
-      const db = req.result;
+    req.onsuccess = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) return;
       const tx = db.transaction(IDB_STORE, 'readwrite');
       tx.objectStore(IDB_STORE).put(handle, 'fixed_dir_handle');
     };
@@ -34,20 +39,31 @@ async function saveStoredDirectoryHandle(handle: any) {
 async function getStoredDirectoryHandle(): Promise<any | null> {
   return new Promise((resolve) => {
     try {
+      if (typeof window === 'undefined' || !('indexedDB' in window)) {
+        resolve(null);
+        return;
+      }
       const req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = () => {
-        req.result.createObjectStore(IDB_STORE);
+      req.onupgradeneeded = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
       };
-      req.onsuccess = () => {
-        const db = req.result;
+      req.onsuccess = (e: any) => {
+        const db = e.target.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) {
           resolve(null);
           return;
         }
-        const tx = db.transaction(IDB_STORE, 'readonly');
-        const getReq = tx.objectStore(IDB_STORE).get('fixed_dir_handle');
-        getReq.onsuccess = () => resolve(getReq.result || null);
-        getReq.onerror = () => resolve(null);
+        try {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const getReq = tx.objectStore(IDB_STORE).get('fixed_dir_handle');
+          getReq.onsuccess = () => resolve(getReq.result || null);
+          getReq.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
       };
       req.onerror = () => resolve(null);
     } catch {
@@ -68,8 +84,12 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   // Selector de modo de descarga: 'fixed' (Carpeta Fija) o 'ask' (Preguntar Siempre)
   const [downloadMode, setDownloadMode] = useState<'fixed' | 'ask'>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('twinlink_download_mode');
-      if (saved === 'fixed' || saved === 'ask') return saved;
+      try {
+        const saved = localStorage.getItem('twinlink_download_mode');
+        if (saved === 'fixed' || saved === 'ask') return saved;
+      } catch (e) {
+        console.warn('No se pudo acceder a localStorage:', e);
+      }
     }
     return 'ask';
   });
@@ -97,7 +117,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   // Persistir la preferencia de modo de descarga siempre que cambie
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('twinlink_download_mode', downloadMode);
+      try {
+        localStorage.setItem('twinlink_download_mode', downloadMode);
+      } catch (e) {
+        console.warn('No se pudo guardar preferencia en localStorage:', e);
+      }
     }
   }, [downloadMode]);
 
@@ -115,7 +139,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       saveStoredDirectoryHandle(handle);
       setDownloadMode('fixed');
       if (typeof window !== 'undefined') {
-        localStorage.setItem('twinlink_download_mode', 'fixed');
+        try {
+          localStorage.setItem('twinlink_download_mode', 'fixed');
+        } catch (e) {
+          console.warn(e);
+        }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -132,7 +160,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   const handleSelectFixedMode = async () => {
     setDownloadMode('fixed');
     if (typeof window !== 'undefined') {
-      localStorage.setItem('twinlink_download_mode', 'fixed');
+      try {
+        localStorage.setItem('twinlink_download_mode', 'fixed');
+      } catch (e) {
+        console.warn(e);
+      }
     }
     if (!fixedDirHandle && isFileSystemAccessSupported) {
       await handlePickFixedFolder();
@@ -142,7 +174,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   const handleSelectAskMode = () => {
     setDownloadMode('ask');
     if (typeof window !== 'undefined') {
-      localStorage.setItem('twinlink_download_mode', 'ask');
+      try {
+        localStorage.setItem('twinlink_download_mode', 'ask');
+      } catch (e) {
+        console.warn(e);
+      }
     }
     setIframeNotice(false);
   };
@@ -329,7 +365,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       {files.length > 0 && (
         <div className="mt-5 pt-4 border-t border-slate-800/80 space-y-3">
           
-          {/* Selector de modo de descarga (Solo visible cuando se pulsa el icono de engranaje) */}
+          {/* Selector de modo de descarga (Visible únicamente en navegadores compatibles con File System Access API) */}
           {isFileSystemAccessSupported && showSettings && (
             <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800 shadow-xl space-y-2 transition-all">
               <div className="flex items-center justify-between px-2 pt-0.5 text-[11px] font-semibold text-slate-400">
@@ -409,7 +445,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             </div>
           )}
 
-          {/* Fila con Botón principal de descarga y Botón de engranaje */}
+          {/* Fila con Botón principal de descarga y Botón de engranaje (solo en navegadores con soporte) */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -434,7 +470,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
               )}
             </button>
 
-            {/* Icono de engranaje delicado al costado derecho (solo en navegadores compatibles) */}
+            {/* Icono de engranaje para configurar opciones de descarga (Solo en navegadores compatibles como Chrome/Edge de escritorio) */}
             {isFileSystemAccessSupported && (
               <button
                 type="button"

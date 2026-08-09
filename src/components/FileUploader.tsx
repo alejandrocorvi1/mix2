@@ -280,7 +280,12 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
             <Upload className="w-7 h-7" />
           </div>
           <p className="text-sm font-semibold text-slate-200">
-            Arrastra tus archivos aquí o <span className="text-orange-400 underline">haz clic para examinar</span>
+            <span className="hidden sm:inline">
+              Arrastra tus archivos aquí o <span className="text-orange-400 underline">haz clic para examinar</span>
+            </span>
+            <span className="sm:hidden text-orange-400 underline">
+              haz clic para examinar
+            </span>
           </p>
           <p className="text-xs text-slate-500 mt-1">
             Puedes seleccionar varios archivos simultáneamente (documentos, imágenes, videos, comprimidos)

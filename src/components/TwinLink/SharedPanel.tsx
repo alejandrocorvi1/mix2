@@ -601,55 +601,41 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
 
         {/* Version Celular Móvil (debajo de md) */}
         <header className="flex md:hidden flex-col gap-2.5 px-3 py-2.5 bg-slate-900/90 border-b border-slate-800 sticky top-0 z-10">
-          {/* Linea Superior: Salir de sala (Izquierda) | Número de sala (Centro) | Status (Derecha) */}
-          <div className="grid grid-cols-3 items-center w-full">
-            {/* Margen Izquierdo: Salir de sala */}
-            <div className="flex justify-start">
-              <button
-                onClick={handleExitRoom}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
-                title="Salir de la sala"
-              >
-                <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span className="text-xs">Salir</span>
-              </button>
-            </div>
+          {/* Linea Superior: Salir | Código | Status */}
+          <div className="grid grid-cols-3 gap-2 w-full">
+            <button
+              onClick={handleExitRoom}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 active:bg-slate-700 border border-slate-700/60 rounded-xl transition-colors"
+              title="Salir de la sala"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-400" />
+              <span>Salir</span>
+            </button>
 
-            {/* Centro de la Pantalla: Número de sala */}
-            <div className="flex justify-center">
-              <button
-                onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 border border-cyan-500/30 hover:border-cyan-500/60 rounded-xl transition-all group"
-                title="Copiar código de la sala"
-              >
-                <span className="text-xs font-mono font-bold text-cyan-400 group-hover:text-cyan-300 tracking-wider">
-                  {roomCode}
+            <button
+              onClick={handleCopyCode}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 active:bg-slate-700 border border-slate-700/60 rounded-xl transition-colors group"
+              title="Copiar código de la sala"
+            >
+              <span className="font-mono font-bold text-cyan-400 group-hover:text-cyan-300 tracking-wider">
+                {roomCode}
+              </span>
+            </button>
+
+            {connectedCount > 1 ? (
+              <div className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                {copiedCode ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3 h-3 text-slate-400 group-hover:text-cyan-400" />
-                )}
-              </button>
-            </div>
-
-            {/* Margen Derecho: Status de conexión */}
-            <div className="flex justify-end">
-              {connectedCount > 1 ? (
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-[11px] font-medium">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>En Vivo</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/80 border border-slate-700/60 text-slate-400 rounded-full text-[11px] font-medium">
-                  <span className="h-2 w-2 rounded-full bg-slate-500"></span>
-                  <span>Offline</span>
-                </div>
-              )}
-            </div>
+                <span>En Vivo</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-400 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                <span className="h-2 w-2 rounded-full bg-slate-500"></span>
+                <span>Offline</span>
+              </div>
+            )}
           </div>
 
           {/* Linea Inferior Móvil: Acciones de chat */}

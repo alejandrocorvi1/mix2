@@ -74,6 +74,12 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
   const [copiedChat, setCopiedChat] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const connectedCountRef = useRef<number>(connectedCount);
+
+  // Keep ref updated
+  useEffect(() => {
+    connectedCountRef.current = connectedCount;
+  }, [connectedCount]);
 
   // Save to recent codes history & ensure anonymous auth
   useEffect(() => {
@@ -92,12 +98,64 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     };
   }, [roomCode]);
 
-  // 1. Initialize room session & heartbeat
+  // Handle manual exit with presence cleanup
+  const handleExitRoom = async () => {
+    try {
+      const presenceRef = doc(db, 'sessions', roomCode, 'presence', currentDeviceId);
+      await deleteDoc(presenceRef);
+    } catch (err) {
+      console.warn('Error deleting presence on manual exit:', err);
+    }
+    onExit();
+  };
+
+  // 1. Initialize room session & adaptive heartbeat
   useEffect(() => {
     if (!isAuthReady) return;
-    let heartbeatTimer: NodeJS.Timeout;
+    let timerId: NodeJS.Timeout;
+    let isCancelled = false;
 
-    const initSessionAndHeartbeat = async () => {
+    const removePresence = () => {
+      try {
+        const presenceRef = doc(db, 'sessions', roomCode, 'presence', currentDeviceId);
+        deleteDoc(presenceRef);
+      } catch (err) {
+        console.warn('Error deleting presence on unload:', err);
+      }
+    };
+
+    const handleUnload = () => {
+      removePresence();
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
+    const sendHeartbeat = async () => {
+      try {
+        const presenceRef = doc(db, 'sessions', roomCode, 'presence', currentDeviceId);
+        await setDoc(
+          presenceRef,
+          {
+            deviceId: currentDeviceId,
+            lastSeen: serverTimestamp(),
+            joinedAt: serverTimestamp(),
+            role: isHost ? 'host' : 'guest',
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.warn('Presence heartbeat error:', err);
+      }
+
+      if (!isCancelled) {
+        // Adaptive heartbeat: 5s if searching/alone, 20s when connected to other devices
+        const delayMs = connectedCountRef.current > 1 ? 20000 : 5000;
+        timerId = setTimeout(sendHeartbeat, delayMs);
+      }
+    };
+
+    const initSession = async () => {
       try {
         const roomRef = doc(db, 'sessions', roomCode);
         await setDoc(
@@ -110,43 +168,25 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
           { merge: true }
         );
 
-        // Heartbeat function
-        const sendHeartbeat = async () => {
-          try {
-            const presenceRef = doc(db, 'sessions', roomCode, 'presence', currentDeviceId);
-            await setDoc(
-              presenceRef,
-              {
-                deviceId: currentDeviceId,
-                lastSeen: serverTimestamp(),
-                joinedAt: serverTimestamp(),
-                role: isHost ? 'host' : 'guest',
-              },
-              { merge: true }
-            );
-          } catch (err) {
-            console.warn('Presence heartbeat error:', err);
-          }
-        };
-
-        // Initial heartbeat
+        // Send initial heartbeat and start recursive loop
         await sendHeartbeat();
-
-        // Repeat heartbeat every 3 seconds
-        heartbeatTimer = setInterval(sendHeartbeat, 3000);
       } catch (err) {
         console.error('Error initializing session:', err);
       }
     };
 
-    initSessionAndHeartbeat();
+    initSession();
 
     return () => {
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      isCancelled = true;
+      if (timerId) clearTimeout(timerId);
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+      removePresence();
     };
   }, [roomCode, currentDeviceId, isHost, isAuthReady]);
 
-  // 2. Presence Listener (Count active devices within last 10s)
+  // 2. Presence Listener (Count active devices with 45s clock drift / latency tolerance)
   useEffect(() => {
     if (!isAuthReady) return;
     const presenceRef = collection(db, 'sessions', roomCode, 'presence');
@@ -158,6 +198,12 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
         let activeCount = 0;
 
         snapshot.docs.forEach((docSnap) => {
+          // Current device is always active
+          if (docSnap.id === currentDeviceId) {
+            activeCount++;
+            return;
+          }
+
           const data = docSnap.data() as PresenceItem;
           if (data.lastSeen) {
             let lastSeenMs = nowMs;
@@ -169,10 +215,14 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
               lastSeenMs = data.lastSeen.toMillis();
             }
 
-            if (nowMs - lastSeenMs <= 10000) {
+            // 45s threshold covers 20s heartbeat + network latency + clock drift between devices
+            const diffMs = Math.abs(nowMs - lastSeenMs);
+            const elapsedMs = nowMs - lastSeenMs;
+            if (diffMs <= 45000 || elapsedMs <= 45000) {
               activeCount++;
             }
           } else {
+            // New device with pending serverTimestamp
             activeCount++;
           }
         });
@@ -185,7 +235,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     );
 
     return () => unsubscribe();
-  }, [roomCode, isAuthReady]);
+  }, [roomCode, isAuthReady, currentDeviceId]);
 
   // 3. Real-time Messages Listener
   useEffect(() => {
@@ -471,7 +521,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
           {/* Left: Exit, Room Code, Live Presence */}
           <div className="flex items-center gap-3">
             <button
-              onClick={onExit}
+              onClick={handleExitRoom}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
               title="Salir de la sala"
             >
@@ -556,7 +606,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
             {/* Margen Izquierdo: Salir de sala */}
             <div className="flex justify-start">
               <button
-                onClick={onExit}
+                onClick={handleExitRoom}
                 className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl transition-all border border-slate-700/60"
                 title="Salir de la sala"
               >

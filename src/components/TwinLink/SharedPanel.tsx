@@ -66,6 +66,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
 
   // Shared Room Files
   const [roomFiles, setRoomFiles] = useState<UploadedFileInfo[]>([]);
+  const [fileLogs, setFileLogs] = useState<UploadedFileInfo[]>([]);
 
   // UI state
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -315,6 +316,47 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     return () => unsubscribe();
   }, [roomCode, isAuthReady]);
 
+  // 5. Real-time File Logs Listener
+  useEffect(() => {
+    if (!isAuthReady) return;
+    const logsQuery = query(
+      collection(db, 'sessions', roomCode, 'file_logs'),
+      orderBy('uploadedAt', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(
+      logsQuery,
+      (snapshot) => {
+        const list: UploadedFileInfo[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          let uploadedAtIso = new Date().toISOString();
+          if (data.uploadedAt instanceof Timestamp) {
+            uploadedAtIso = data.uploadedAt.toDate().toISOString();
+          } else if (typeof data.uploadedAt === 'string') {
+            uploadedAtIso = data.uploadedAt;
+          }
+
+          list.push({
+            id: docSnap.id,
+            filePath: data.filePath || '',
+            fileName: data.fileName || 'Archivo',
+            fileSize: data.fileSize || 0,
+            fileType: data.fileType || 'Archivo',
+            uploadedAt: uploadedAtIso,
+            shareUrl: '',
+          });
+        });
+        setFileLogs(list);
+      },
+      (error) => {
+        console.warn('File logs snapshot error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [roomCode, isAuthReady]);
+
   // Auto-scroll on new message
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -350,7 +392,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     }
   };
 
-  // Upload File Success -> Save to Firestore room subcollection
+  // Upload File Success -> Save to Firestore room subcollection and persistent log
   const handleFileUploadSuccess = async (fileInfo: UploadedFileInfo) => {
     try {
       const fileRef = doc(db, 'sessions', roomCode, 'files', fileInfo.id);
@@ -363,6 +405,18 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
         uploadedAt: serverTimestamp(),
         senderId: currentDeviceId,
         downloaded: false,
+      });
+
+      // Save to persistent file_logs collection
+      const logRef = doc(db, 'sessions', roomCode, 'file_logs', fileInfo.id);
+      await setDoc(logRef, {
+        id: fileInfo.id,
+        filePath: fileInfo.filePath,
+        fileName: fileInfo.fileName,
+        fileSize: fileInfo.fileSize,
+        fileType: fileInfo.fileType,
+        uploadedAt: serverTimestamp(),
+        senderId: currentDeviceId,
       });
 
       await setDoc(
@@ -386,9 +440,10 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     }
   };
 
-  // Clear All Room Files
+  // Clear All Room Files and persistent logs
   const handleClearRoomFiles = async () => {
     try {
+      // Delete active files and their storage
       const filesRef = collection(db, 'sessions', roomCode, 'files');
       const snapshot = await getDocs(filesRef);
       const deletePromises = snapshot.docs.map(async (docSnap) => {
@@ -399,6 +454,12 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
         return deleteDoc(docSnap.ref);
       });
       await Promise.all(deletePromises);
+
+      // Clear persistent file_logs collection
+      const logsRef = collection(db, 'sessions', roomCode, 'file_logs');
+      const logsSnapshot = await getDocs(logsRef);
+      const logDeletePromises = logsSnapshot.docs.map((docSnap) => deleteDoc(docSnap.ref));
+      await Promise.all(logDeletePromises);
     } catch (err) {
       console.error('Error clearing room files:', err);
     }
@@ -744,6 +805,8 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
         {/* Synced Room Files List */}
         <HistoryList
           files={roomFiles}
+          fileLogs={fileLogs}
+          roomCode={roomCode}
           onClearHistory={handleClearRoomFiles}
           onItemDownloaded={handleItemDownloaded}
         />

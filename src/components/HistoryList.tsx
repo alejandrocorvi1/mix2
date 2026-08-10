@@ -6,6 +6,8 @@ import { downloadAndRemoveFromSupabase } from '../supabaseClient';
 
 interface HistoryListProps {
   files: UploadedFileInfo[];
+  fileLogs?: UploadedFileInfo[];
+  roomCode?: string;
   onOpenDownloadView?: (filePath: string, fileName: string) => void;
   onClearHistory: () => void;
   onItemDownloaded?: (filePath: string, fileId: string) => void;
@@ -74,6 +76,8 @@ async function getStoredDirectoryHandle(): Promise<any | null> {
 
 export const HistoryList: React.FC<HistoryListProps> = ({
   files,
+  fileLogs = [],
+  roomCode = '',
   onClearHistory,
   onItemDownloaded,
 }) => {
@@ -315,12 +319,58 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     setDownloadingIndex(0);
   };
 
+  // Export history log as UTF-8 .txt file
+  const handleDownloadHistoryTxt = () => {
+    const listToExport = fileLogs.length > 0 ? fileLogs : files;
+    const room = roomCode || 'General';
+    const now = new Date().toLocaleString('es-ES');
+
+    let textContent = `===============================================\n`;
+    textContent += `     REGISTRO DE ARCHIVOS SUBIDOS - TWINLINK\n`;
+    textContent += `===============================================\n`;
+    textContent += `Código de Sala: ${room}\n`;
+    textContent += `Fecha de exportación: ${now}\n`;
+    textContent += `Total de archivos registrados: ${listToExport.length}\n`;
+    textContent += `-----------------------------------------------\n\n`;
+
+    if (listToExport.length === 0) {
+      textContent += `No se han registrado archivos subidos en esta sala.\n`;
+    } else {
+      listToExport.forEach((item, index) => {
+        const dateStr = item.uploadedAt ? new Date(item.uploadedAt).toLocaleString('es-ES') : 'Fecha no registrada';
+        const sizeStr = formatFileSize(item.fileSize);
+        textContent += `${index + 1}. ${item.fileName}\n`;
+        textContent += `   Tamaño: ${sizeStr}\n`;
+        textContent += `   Fecha de subida: ${dateStr}\n\n`;
+      });
+    }
+
+    // Explicit UTF-8 BOM byte order mark
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Registro_Archivos_${room.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mt-8">
       
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-orange-400" />
+          <button
+            type="button"
+            onClick={handleDownloadHistoryTxt}
+            title="Descargar registro de archivos subidos (.txt)"
+            className="p-1 -m-1 rounded-lg hover:bg-slate-800 transition-colors flex items-center justify-center active:scale-95 group focus:outline-none"
+          >
+            <Clock className="w-5 h-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
+          </button>
           <h3 className="font-bold text-white text-base">Archivos Subidos</h3>
           <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
             {files.length}

@@ -252,20 +252,33 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     setIsDownloadingAll(true);
     setDownloadingIndex(0);
 
-    const filesToDownload = [...files];
+    const groupsToDownload = groupFilesByReassembly(files);
 
-    for (let i = 0; i < filesToDownload.length; i++) {
-      const file = filesToDownload[i];
+    for (let i = 0; i < groupsToDownload.length; i++) {
+      const group = groupsToDownload[i];
       setDownloadingIndex(i);
 
       try {
-        const result = await downloadAndRemoveFromSupabase(file.filePath, file.fileName);
-        if (result.success && result.blob) {
+        const blobs: Blob[] = [];
+        let allPartsSuccess = true;
+
+        for (const partFile of group.files) {
+          const result = await downloadAndRemoveFromSupabase(partFile.filePath, partFile.fileName);
+          if (result.success && result.blob) {
+            blobs.push(result.blob);
+          } else {
+            allPartsSuccess = false;
+            console.warn(`Error al descargar parte ${partFile.fileName}:`, result.error);
+          }
+        }
+
+        if (allPartsSuccess && blobs.length > 0) {
+          // Reensamblar todas las partes en un único Blob continuo
+          const combinedBlob = new Blob(blobs, { type: blobs[0].type || 'application/octet-stream' });
           let savedViaFS = false;
 
           if (targetDirHandle) {
             try {
-              // Verificar/solicitar permiso si es necesario
               if (typeof targetDirHandle.queryPermission === 'function') {
                 const status = await targetDirHandle.queryPermission({ mode: 'readwrite' });
                 if (status !== 'granted' && typeof targetDirHandle.requestPermission === 'function') {
@@ -273,25 +286,23 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 }
               }
 
-              // Guardar directamente en la carpeta elegida mediante File System Access API
-              const fileHandle = await targetDirHandle.getFileHandle(file.fileName, { create: true });
+              const fileHandle = await targetDirHandle.getFileHandle(group.displayName, { create: true });
               const writable = await fileHandle.createWritable();
-              await writable.write(result.blob);
+              await writable.write(combinedBlob);
               await writable.close();
               savedViaFS = true;
             } catch (fsErr) {
-              console.warn(`Error guardando en la carpeta seleccionada para ${file.fileName}, usando descarga estándar:`, fsErr);
+              console.warn(`Error guardando en la carpeta seleccionada para ${group.displayName}, usando descarga estándar:`, fsErr);
               savedViaFS = false;
             }
           }
 
-          // Fallback a descarga nativa del navegador
           if (!savedViaFS) {
-            const url = window.URL.createObjectURL(result.blob);
+            const url = window.URL.createObjectURL(combinedBlob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            a.download = file.fileName;
+            a.download = group.displayName;
             document.body.appendChild(a);
             a.click();
             setTimeout(() => {
@@ -300,17 +311,18 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             }, 1000);
           }
 
+          // Eliminar cada parte descargada de la BD/almacenamiento
           if (onItemDownloaded) {
-            await onItemDownloaded(file.filePath, file.id);
+            for (const partFile of group.files) {
+              await onItemDownloaded(partFile.filePath, partFile.id);
+            }
           }
-        } else {
-          console.warn(`Error al descargar ${file.fileName}:`, result.error);
         }
       } catch (err: any) {
-        console.error(`Error procesando descarga de ${file.fileName}:`, err);
+        console.error(`Error procesando descarga de ${group.displayName}:`, err);
       }
 
-      if (i < filesToDownload.length - 1) {
+      if (i < groupsToDownload.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
     }
@@ -358,6 +370,78 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  // Helper para agrupar fragmentos de archivos divididos (>49MB)
+  const groupFilesByReassembly = (fileList: UploadedFileInfo[]) => {
+    const map = new Map<string, { baseName: string; ext: string; totalParts: number; items: { partIndex: number; file: UploadedFileInfo }[] }>();
+    const standaloneUnits: {
+      id: string;
+      displayName: string;
+      totalSize: number;
+      isFragmented: boolean;
+      totalParts: number;
+      availablePartsCount: number;
+      files: UploadedFileInfo[];
+    }[] = [];
+
+    const PART_REGEX = /^(.+) \(Parte (\d+) de (\d+)\)(\.[^.]+)?$/i;
+
+    fileList.forEach((file) => {
+      const match = file.fileName.match(PART_REGEX);
+      if (match) {
+        const baseName = match[1];
+        const partIndex = parseInt(match[2], 10);
+        const totalParts = parseInt(match[3], 10);
+        const ext = match[4] || '';
+        const key = `${baseName}${ext}`;
+
+        if (!map.has(key)) {
+          map.set(key, { baseName, ext, totalParts, items: [] });
+        }
+        map.get(key)!.items.push({ partIndex, file });
+      } else {
+        standaloneUnits.push({
+          id: file.id,
+          displayName: file.fileName,
+          totalSize: file.fileSize,
+          isFragmented: false,
+          totalParts: 1,
+          availablePartsCount: 1,
+          files: [file],
+        });
+      }
+    });
+
+    const groupedUnits: {
+      id: string;
+      displayName: string;
+      totalSize: number;
+      isFragmented: boolean;
+      totalParts: number;
+      availablePartsCount: number;
+      files: UploadedFileInfo[];
+    }[] = [];
+
+    map.forEach((group, key) => {
+      group.items.sort((a, b) => a.partIndex - b.partIndex);
+      const sortedFiles = group.items.map((it) => it.file);
+      const totalSize = sortedFiles.reduce((acc, f) => acc + f.fileSize, 0);
+
+      groupedUnits.push({
+        id: `group-${key}`,
+        displayName: key,
+        totalSize,
+        isFragmented: true,
+        totalParts: group.totalParts,
+        availablePartsCount: sortedFiles.length,
+        files: sortedFiles,
+      });
+    });
+
+    return [...standaloneUnits, ...groupedUnits];
+  };
+
+  const fileGroups = groupFilesByReassembly(files);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mt-8">
       
@@ -387,22 +471,27 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       </div>
 
       <div className="space-y-3">
-        {files.map((file) => {
+        {fileGroups.map((group) => {
           return (
             <div
-              key={file.id}
+              key={group.id}
               className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`p-2.5 rounded-xl border shrink-0 ${getFileExtensionColor(file.fileName)}`}>
+                <div className={`p-2.5 rounded-xl border shrink-0 ${getFileExtensionColor(group.displayName)}`}>
                   <FileText className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-xs sm:text-sm text-white truncate">
-                    {file.fileName}
+                    {group.displayName}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                    <span>{formatFileSize(file.fileSize)}</span>
+                    <span>{formatFileSize(group.totalSize)}</span>
+                    {group.isFragmented && (
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-1">
+                        ⚡ {group.availablePartsCount}/{group.totalParts} partes (Reensamblable)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

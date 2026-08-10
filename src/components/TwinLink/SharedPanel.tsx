@@ -539,11 +539,6 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
               <span className="text-xs font-mono font-bold text-cyan-400 group-hover:text-cyan-300 tracking-wider">
                 {roomCode}
               </span>
-              {copiedCode ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400" />
-              )}
             </button>
           </div>
 

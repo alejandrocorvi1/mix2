@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Zap,
-  ArrowRight,
-  Plus,
   History,
   Trash2,
   Lock,
   Smartphone,
   Globe,
-  ShieldCheck,
-  Sparkles,
 } from 'lucide-react';
 import {
   generateRoomCode,
@@ -130,7 +126,6 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
             className="w-full py-3.5 px-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:hover:bg-slate-800 text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99]"
           >
             <span>Unirse con Código</span>
-            <ArrowRight className="w-4 h-4 text-cyan-400" />
           </button>
         </div>
 
@@ -147,7 +142,6 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
           onClick={handleGenerateNew}
           className="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 active:scale-[0.99]"
         >
-          <Sparkles className="w-4 h-4" />
           <span>Generar Nuevo Código</span>
         </button>
       </div>

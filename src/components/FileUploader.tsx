@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, File, AlertCircle, Loader2, HardDriveUpload, PlusCircle, HelpCircle, ShieldAlert, Copy, Check, Trash2, X, Plus, Flame, Download } from 'lucide-react';
 import { uploadToSupabaseBucket, tryCreateTempFilesBucket, downloadAndRemoveFromSupabase } from '../supabaseClient';
 import { formatFileSize, getFileExtensionColor } from '../utils/formatters';
@@ -122,6 +122,43 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
     setIsBucketError(false);
     setIsRlsError(false);
   };
+
+  // Detectar y procesar archivos recibidos desde la acción Compartir de Android (Web Share Target API)
+  useEffect(() => {
+    async function checkSharedFiles() {
+      if (typeof window === 'undefined' || !('caches' in window)) return;
+      try {
+        const hasSharedParam = window.location.search.includes('shared=true');
+        const cache = await caches.open('twinlink-shared-files');
+        const keys = await cache.keys();
+        if (keys.length > 0 || hasSharedParam) {
+          const filesToAdd: File[] = [];
+          for (const req of keys) {
+            const res = await cache.match(req);
+            if (res) {
+              const blob = await res.blob();
+              const rawFileName = res.headers.get('x-file-name') || 'archivo_compartido';
+              const fileName = decodeURIComponent(rawFileName);
+              const fileType = res.headers.get('x-file-type') || blob.type || 'application/octet-stream';
+              const file = createChunkFile(blob, fileName, Date.now(), fileType);
+              filesToAdd.push(file);
+              await cache.delete(req);
+            }
+          }
+          if (filesToAdd.length > 0) {
+            addFiles(filesToAdd);
+          }
+          if (hasSharedParam) {
+            const cleanUrl = window.location.pathname + window.location.search.replace(/([?&])shared=true(&|$)/, '$1').replace(/[?&]$/, '');
+            window.history.replaceState({}, '', cleanUrl || '/');
+          }
+        }
+      } catch (err) {
+        console.warn('Error recuperando archivos compartidos por Web Share Target:', err);
+      }
+    }
+    checkSharedFiles();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

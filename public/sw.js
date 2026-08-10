@@ -33,6 +33,46 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Manejar recepción de archivos desde el menú Compartir de Android (Web Share Target API)
+  if (event.request.method === 'POST' && url.pathname === '/share-target') {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const mediaFiles = formData.getAll('media');
+
+          if (mediaFiles && mediaFiles.length > 0) {
+            const cache = await caches.open('twinlink-shared-files');
+            // Limpiar descargas compartidas anteriores
+            const keys = await cache.keys();
+            for (const key of keys) {
+              await cache.delete(key);
+            }
+
+            for (let i = 0; i < mediaFiles.length; i++) {
+              const file = mediaFiles[i];
+              if (file && file.name) {
+                const response = new Response(file, {
+                  headers: {
+                    'x-file-name': encodeURIComponent(file.name),
+                    'x-file-type': file.type || 'application/octet-stream'
+                  }
+                });
+                await cache.put(`/shared-file-${i}`, response);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error procesando archivos compartidos en SW:', err);
+        }
+        return Response.redirect('/?shared=true', 303);
+      })()
+    );
+    return;
+  }
+
   // Only handle GET requests, bypass for Supabase/Firestore real-time connections
   if (
     event.request.method !== 'GET' ||

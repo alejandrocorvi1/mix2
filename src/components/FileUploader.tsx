@@ -205,6 +205,7 @@ FOR DELETE TO anon USING (bucket_id = 'temp-files');`;
 
     setIsUploading(true);
     setErrorMessage(null);
+    setSplitNotice(null);
     setIsBucketError(false);
     setIsRlsError(false);
 

@@ -160,6 +160,12 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
                   Acceder
                 </button>
               </div>
+
+              <div className="pt-3 text-center">
+                <p className="text-xs text-slate-400/80 font-mono tracking-wide select-none">
+                  Generado en GAIS cuenta AC2
+                </p>
+              </div>
             </form>
           </div>
         ) : (

@@ -80,13 +80,13 @@ export const InitialScreen: React.FC<InitialScreenProps> = ({
   return (
     <div className="w-full max-w-lg mx-auto space-y-6 animate-fadeIn">
       {/* Header Branding */}
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-md">
+      <div className="text-center space-y-0.5">
+        <h1 className="text-5xl sm:text-6xl font-black tracking-tight drop-shadow-md">
           <span className="bg-gradient-to-r from-blue-600 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
             TwinLink
           </span>
         </h1>
-        <p className="text-slate-400 text-sm max-w-sm mx-auto font-bold italic">
+        <p className="text-slate-400 text-sm max-w-sm mx-auto font-bold italic -mt-0.5">
           By Ale Corvi
         </p>
       </div>

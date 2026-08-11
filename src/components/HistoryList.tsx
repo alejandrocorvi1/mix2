@@ -495,54 +495,6 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                   </div>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  // Descargar solo este grupo reensamblado
-                  const downloadSingleGroup = async () => {
-                    try {
-                      const blobs: Blob[] = [];
-                      for (const partFile of group.files) {
-                        const result = await downloadAndRemoveFromSupabase(partFile.filePath, partFile.fileName);
-                        if (result.success && result.blob) {
-                          blobs.push(result.blob);
-                        }
-                      }
-                      if (blobs.length > 0) {
-                        const combinedBlob = new Blob(blobs, { type: blobs[0].type || 'application/octet-stream' });
-                        const url = window.URL.createObjectURL(combinedBlob);
-                        const a = document.createElement('a');
-                        a.style.display = 'none';
-                        a.href = url;
-                        a.download = group.displayName;
-                        document.body.appendChild(a);
-                        a.click();
-                        setTimeout(() => {
-                          window.URL.revokeObjectURL(url);
-                          document.body.removeChild(a);
-                        }, 1000);
-
-                        if (onItemDownloaded) {
-                          for (const partFile of group.files) {
-                            await onItemDownloaded(partFile.filePath, partFile.id);
-                          }
-                        }
-                      }
-                    } catch (err) {
-                      console.error('Error al descargar archivo:', err);
-                    }
-                  };
-                  downloadSingleGroup();
-                }}
-                title={group.isFragmented ? 'Reensamblar y Descargar este archivo completo' : 'Descargar este archivo'}
-                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-orange-400 hover:text-orange-300 border border-slate-800 transition flex items-center gap-1 text-xs font-semibold shrink-0"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {group.isFragmented ? 'Reensamblar' : 'Descargar'}
-                </span>
-              </button>
             </div>
           );
         })}

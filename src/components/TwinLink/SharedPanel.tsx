@@ -188,55 +188,78 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
     };
   }, [roomCode, currentDeviceId, isHost, isAuthReady]);
 
-  // 2. Presence Listener (Count active devices with 45s clock drift / latency tolerance)
+  // 2. Presence Listener (Count active devices with 90s window for heartbeat / clock skew)
   useEffect(() => {
     if (!isAuthReady) return;
     const presenceRef = collection(db, 'sessions', roomCode, 'presence');
 
+    let currentDocs: any[] = [];
+
+    const calculateActiveDevices = () => {
+      const nowMs = Date.now();
+      let activeCount = 0;
+
+      currentDocs.forEach((docSnap) => {
+        // Current device is always active
+        if (docSnap.id === currentDeviceId) {
+          activeCount++;
+          return;
+        }
+
+        const data = docSnap.data({ serverTimestamps: 'estimate' }) as PresenceItem;
+        if (!data || !data.lastSeen) {
+          // New device or pending serverTimestamp write -> active
+          activeCount++;
+          return;
+        }
+
+        let lastSeenMs = 0;
+        if (typeof data.lastSeen?.toMillis === 'function') {
+          lastSeenMs = data.lastSeen.toMillis();
+        } else if (typeof data.lastSeen?.seconds === 'number') {
+          lastSeenMs = data.lastSeen.seconds * 1000 + Math.floor((data.lastSeen.nanoseconds || 0) / 1000000);
+        } else if (typeof data.lastSeen === 'number') {
+          lastSeenMs = data.lastSeen;
+        } else if (data.lastSeen instanceof Timestamp) {
+          lastSeenMs = data.lastSeen.toMillis();
+        }
+
+        if (lastSeenMs > 0) {
+          const diffMs = Math.abs(nowMs - lastSeenMs);
+          // Active if reported in the last 90 seconds (tolerant to clock skew & heartbeat intervals)
+          if (diffMs <= 90000) {
+            activeCount++;
+          }
+        } else {
+          activeCount++;
+        }
+      });
+
+      setConnectedCount(Math.max(1, activeCount));
+    };
+
     const unsubscribe = onSnapshot(
       presenceRef,
       (snapshot) => {
-        const nowMs = Date.now();
-        let activeCount = 0;
-
-        snapshot.docs.forEach((docSnap) => {
-          // Current device is always active
-          if (docSnap.id === currentDeviceId) {
-            activeCount++;
-            return;
-          }
-
-          const data = docSnap.data() as PresenceItem;
-          if (data.lastSeen) {
-            let lastSeenMs = nowMs;
-            if (data.lastSeen instanceof Timestamp) {
-              lastSeenMs = data.lastSeen.toMillis();
-            } else if (typeof data.lastSeen === 'number') {
-              lastSeenMs = data.lastSeen;
-            } else if (typeof data.lastSeen?.toMillis === 'function') {
-              lastSeenMs = data.lastSeen.toMillis();
-            }
-
-            // 45s threshold covers 20s heartbeat + network latency + clock drift between devices
-            const diffMs = Math.abs(nowMs - lastSeenMs);
-            const elapsedMs = nowMs - lastSeenMs;
-            if (diffMs <= 45000 || elapsedMs <= 45000) {
-              activeCount++;
-            }
-          } else {
-            // New device with pending serverTimestamp
-            activeCount++;
-          }
-        });
-
-        setConnectedCount(Math.max(1, activeCount));
+        currentDocs = snapshot.docs;
+        calculateActiveDevices();
       },
       (error) => {
         console.warn('Presence snapshot error:', error);
       }
     );
 
-    return () => unsubscribe();
+    // Periodically recalculate every 10 seconds as time advances
+    const intervalId = setInterval(() => {
+      if (currentDocs.length > 0) {
+        calculateActiveDevices();
+      }
+    }, 10000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(intervalId);
+    };
   }, [roomCode, isAuthReady, currentDeviceId]);
 
   // 3. Real-time Messages Listener

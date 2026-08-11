@@ -628,7 +628,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
 
           {/* Right: Live Presence Badge */}
           <div className="flex justify-end">
-            {connectedCount > 1 ? (
+            {connectedCount >= 1 ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-xs font-medium">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -639,7 +639,7 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
             ) : (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 border border-slate-700/60 text-slate-400 rounded-full text-xs font-medium">
                 <span className="h-2 w-2 rounded-full bg-slate-500"></span>
-                <span>Offline (1)</span>
+                <span>Desconectado</span>
               </div>
             )}
           </div>
@@ -666,18 +666,18 @@ export const SharedPanel: React.FC<SharedPanelProps> = ({ roomCode, onExit, onOp
             </span>
           </button>
 
-          {connectedCount > 1 ? (
+          {connectedCount >= 1 ? (
             <div className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span>En Vivo</span>
+              <span>En Vivo ({connectedCount})</span>
             </div>
           ) : (
             <div className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-400 bg-slate-800/80 border border-slate-700/60 rounded-xl">
               <span className="h-2 w-2 rounded-full bg-slate-500"></span>
-              <span>Offline</span>
+              <span>Desconectado</span>
             </div>
           )}
         </div>

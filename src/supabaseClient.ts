@@ -22,17 +22,23 @@ let inMemoryUrl: string | null = null;
 let inMemoryKey: string | null = null;
 let inMemoryProjectRef: string | null = null;
 let inMemoryManagementToken: string | null = null;
+let inMemoryTokenCreatedAt: number | null = null;
 
 export function updateGlobalCredentials(
   url: string | null,
   anonKey: string | null,
   projectRef: string | null = null,
-  managementToken: string | null = null
+  managementToken: string | null = null,
+  tokenCreatedAt: number | null = null
 ) {
   inMemoryUrl = url;
   inMemoryKey = anonKey;
   inMemoryProjectRef = projectRef;
   inMemoryManagementToken = managementToken;
+  if (tokenCreatedAt !== null) {
+    inMemoryTokenCreatedAt = tokenCreatedAt;
+    localStorage.setItem('TEMPFILES_SUPABASE_TOKEN_CREATED_AT', tokenCreatedAt.toString());
+  }
 
   if (url && anonKey) {
     localStorage.setItem('TEMPFILES_SUPABASE_URL', url);
@@ -63,11 +69,16 @@ export function getActiveCredentials() {
   const savedKey = localStorage.getItem('TEMPFILES_SUPABASE_ANON_KEY');
   const savedRef = localStorage.getItem('TEMPFILES_SUPABASE_PROJECT_REF');
   const savedToken = localStorage.getItem('TEMPFILES_SUPABASE_MANAGEMENT_TOKEN');
+  const savedCreatedAt = localStorage.getItem('TEMPFILES_SUPABASE_TOKEN_CREATED_AT');
 
   const url = inMemoryUrl || savedUrl || import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
   const anonKey = inMemoryKey || savedKey || import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
   const projectRef = inMemoryProjectRef || savedRef || DEFAULT_PROJECT_REF;
   const managementToken = inMemoryManagementToken || savedToken || DEFAULT_MANAGEMENT_TOKEN;
+
+  // Por defecto se toma que fue creado ayer (hace 24 horas) para una duración total de 1 año (365 días)
+  const defaultYesterday = Date.now() - (24 * 60 * 60 * 1000);
+  const tokenCreatedAt = inMemoryTokenCreatedAt || (savedCreatedAt ? parseInt(savedCreatedAt, 10) : defaultYesterday);
 
   const isConfigured = Boolean(
     url && 
@@ -77,7 +88,34 @@ export function getActiveCredentials() {
     url.includes('supabase.co')
   );
 
-  return { url, anonKey, projectRef, managementToken, isConfigured };
+  return { url, anonKey, projectRef, managementToken, tokenCreatedAt, isConfigured };
+}
+
+/**
+ * Calcula el estado y cuenta regresiva del PAT (Personal Access Token).
+ * La alerta saldrá a los 350 días desde su fecha de creación.
+ */
+export function getPatTokenStatus(customCreatedAt?: number) {
+  const active = getActiveCredentials();
+  const createdAt = customCreatedAt ?? active.tokenCreatedAt;
+  const now = Date.now();
+  const elapsedMs = Math.max(0, now - createdAt);
+  const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+  
+  // Días faltantes para que salte la alerta de 350 días
+  const daysUntilWarning = 350 - elapsedDays;
+  const isWarningRequired = elapsedDays >= 350;
+  
+  // Días totales restantes de validez del token de 1 año (365 días)
+  const totalDaysRemaining = Math.max(0, 365 - elapsedDays);
+
+  return {
+    createdAt,
+    elapsedDays,
+    daysUntilWarning,
+    isWarningRequired,
+    totalDaysRemaining
+  };
 }
 
 let firestoreSyncUnsubscribe: (() => void) | null = null;
@@ -92,6 +130,8 @@ export function initSupabaseFirestoreSync() {
 
   try {
     const credsDocRef = doc(db, 'app_config', 'supabase_credentials');
+    const defaultYesterday = Date.now() - (24 * 60 * 60 * 1000);
+
     firestoreSyncUnsubscribe = onSnapshot(credsDocRef, (docSnap) => {
       if (!docSnap.exists()) {
         setDoc(credsDocRef, {
@@ -99,6 +139,7 @@ export function initSupabaseFirestoreSync() {
           anonKey: SUPABASE_ANON_KEY,
           projectRef: DEFAULT_PROJECT_REF,
           managementToken: DEFAULT_MANAGEMENT_TOKEN,
+          tokenCreatedAt: defaultYesterday,
           updatedAt: serverTimestamp()
         }).catch((err) => {
           console.warn('Error al inicializar app_config/supabase_credentials en Firestore:', err);
@@ -110,7 +151,8 @@ export function initSupabaseFirestoreSync() {
             data.url || SUPABASE_URL,
             data.anonKey || SUPABASE_ANON_KEY,
             data.projectRef || DEFAULT_PROJECT_REF,
-            data.managementToken || DEFAULT_MANAGEMENT_TOKEN
+            data.managementToken || DEFAULT_MANAGEMENT_TOKEN,
+            data.tokenCreatedAt || defaultYesterday
           );
         }
       }

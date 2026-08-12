@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { DownloadPage } from './components/DownloadPage';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { InstructionsModal } from './components/InstructionsModal';
+import { PatRenewalModal } from './components/PatRenewalModal';
 import { InitialScreen } from './components/TwinLink/InitialScreen';
 import { SharedPanel } from './components/TwinLink/SharedPanel';
 import { normalizeRoomCode } from './lib/device';
-import { initSupabaseFirestoreSync } from './supabaseClient';
+import { initSupabaseFirestoreSync, getPatTokenStatus } from './supabaseClient';
 import { Settings } from 'lucide-react';
 
 export default function App() {
@@ -19,6 +20,11 @@ export default function App() {
   // Modals
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isPatModalDismissedSession, setIsPatModalDismissedSession] = useState(false);
+
+  // PAT Expiration status check
+  const patStatus = getPatTokenStatus();
+  const isPatModalOpen = patStatus.isWarningRequired && !isPatModalDismissedSession;
 
   // Initialize Supabase credentials sync with Firestore & Detect URL Params on Load
   useEffect(() => {
@@ -124,6 +130,12 @@ export default function App() {
       <InstructionsModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      <PatRenewalModal
+        isOpen={isPatModalOpen}
+        onClose={() => setIsPatModalDismissedSession(true)}
+        onOpenConfig={() => setIsConfigModalOpen(true)}
       />
 
     </div>

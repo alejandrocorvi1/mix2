@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, Eye, EyeOff, Cloud, Loader2, HardDrive, Shield } from 'lucide-react';
+import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, Eye, EyeOff, Cloud, Loader2, HardDrive, Shield, Clock } from 'lucide-react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
@@ -8,7 +8,8 @@ import {
   DEFAULT_PROJECT_REF,
   DEFAULT_MANAGEMENT_TOKEN,
   getActiveCredentials,
-  updateGlobalCredentials
+  updateGlobalCredentials,
+  getPatTokenStatus
 } from '../supabaseClient';
 import { EgressUsageBadge } from './EgressUsageBadge';
 
@@ -85,7 +86,11 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     const cleanRef = projectRefInput.trim();
     const cleanToken = managementTokenInput.trim();
 
-    updateGlobalCredentials(cleanUrl, cleanKey, cleanRef, cleanToken);
+    // Si cambió la clave del token, reiniciamos el contador a 0 días transcurridos (Date.now())
+    const isTokenChanged = cleanToken !== current.managementToken;
+    const newTokenCreatedAt = isTokenChanged ? Date.now() : (current.tokenCreatedAt || Date.now());
+
+    updateGlobalCredentials(cleanUrl, cleanKey, cleanRef, cleanToken, newTokenCreatedAt);
 
     try {
       await setDoc(doc(db, 'app_config', 'supabase_credentials'), {
@@ -93,6 +98,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
         anonKey: cleanKey || SUPABASE_ANON_KEY,
         projectRef: cleanRef || DEFAULT_PROJECT_REF,
         managementToken: cleanToken || DEFAULT_MANAGEMENT_TOKEN,
+        tokenCreatedAt: newTokenCreatedAt,
         updatedAt: serverTimestamp()
       }, { merge: true });
     } catch (err) {
@@ -106,7 +112,8 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
 
   const handleResetToPlaceholders = async () => {
     setIsSaving(true);
-    updateGlobalCredentials(null, null, DEFAULT_PROJECT_REF, DEFAULT_MANAGEMENT_TOKEN);
+    const defaultYesterday = Date.now() - (24 * 60 * 60 * 1000);
+    updateGlobalCredentials(null, null, DEFAULT_PROJECT_REF, DEFAULT_MANAGEMENT_TOKEN, defaultYesterday);
     setUrlInput('');
     setKeyInput('');
     setProjectRefInput(DEFAULT_PROJECT_REF);
@@ -118,6 +125,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
         anonKey: SUPABASE_ANON_KEY,
         projectRef: DEFAULT_PROJECT_REF,
         managementToken: DEFAULT_MANAGEMENT_TOKEN,
+        tokenCreatedAt: defaultYesterday,
         updatedAt: serverTimestamp()
       }, { merge: true });
     } catch (err) {
@@ -352,6 +360,50 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
                   managementToken={managementTokenInput}
                 />
               </div>
+
+              {/* Cartel al pie con la cuenta regresiva del PAT */}
+              {(() => {
+                const patStatus = getPatTokenStatus(current.tokenCreatedAt);
+                const isUrgent = patStatus.daysUntilWarning <= 0;
+                return (
+                  <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                    isUrgent
+                      ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                      : patStatus.daysUntilWarning <= 30
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                      : 'bg-slate-950 border-slate-800 text-slate-300'
+                  }`}>
+                    <div className="flex items-start gap-2.5">
+                      <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${isUrgent ? 'text-red-400' : 'text-amber-400'}`} />
+                      <div>
+                        <p className="font-semibold text-slate-200">
+                          {isUrgent
+                            ? '¡Alerta Activa! Renovar SUPABASE MANAGEMENT TOKEN'
+                            : `Cuenta Regresiva PAT: ${patStatus.daysUntilWarning} días restantes para renovación`}
+                        </p>
+                        <p className="text-[11px] opacity-80 mt-0.5 leading-snug">
+                          {isUrgent
+                            ? 'Han transcurrido 350+ días desde la creación del token. El cartel emergente está activo al abrir la app.'
+                            : `Faltan ${patStatus.daysUntilWarning} días para la alerta de los 350 días (vigencia total: ${patStatus.totalDaysRemaining} días restantes).`}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = Date.now();
+                        updateGlobalCredentials(urlInput.trim(), keyInput.trim(), projectRefInput.trim(), managementTokenInput.trim(), now);
+                        setDoc(doc(db, 'app_config', 'supabase_credentials'), { tokenCreatedAt: now }, { merge: true });
+                      }}
+                      className="px-2.5 py-1.5 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition shrink-0 self-end sm:self-auto"
+                      title="Reiniciar contador a 0 días transcurridos"
+                    >
+                      Reiniciar Contador
+                    </button>
+                  </div>
+                );
+              })()}
 
               <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-800">
                 <button

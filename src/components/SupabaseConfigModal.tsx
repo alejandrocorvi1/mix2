@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, ArrowRight, Eye, EyeOff, Cloud, Loader2 } from 'lucide-react';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, getActiveCredentials, resetSupabaseClient, updateGlobalCredentials } from '../supabaseClient';
+import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, Eye, EyeOff, Cloud, Loader2, HardDrive, Shield } from 'lucide-react';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  DEFAULT_PROJECT_REF,
+  DEFAULT_MANAGEMENT_TOKEN,
+  getActiveCredentials,
+  updateGlobalCredentials
+} from '../supabaseClient';
+import { EgressUsageBadge } from './EgressUsageBadge';
 
 interface SupabaseConfigModalProps {
   isOpen: boolean;
@@ -29,16 +39,23 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   const [keyInput, setKeyInput] = useState(
     localStorage.getItem('TEMPFILES_SUPABASE_ANON_KEY') || ''
   );
+  const [projectRefInput, setProjectRefInput] = useState(
+    localStorage.getItem('TEMPFILES_SUPABASE_PROJECT_REF') || DEFAULT_PROJECT_REF
+  );
+  const [managementTokenInput, setManagementTokenInput] = useState(
+    localStorage.getItem('TEMPFILES_SUPABASE_MANAGEMENT_TOKEN') || DEFAULT_MANAGEMENT_TOKEN
+  );
+
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Sync inputs with active credentials when opening
   useEffect(() => {
     if (isOpen) {
       const active = getActiveCredentials();
-      if (active.isConfigured) {
-        setUrlInput(active.url);
-        setKeyInput(active.anonKey);
-      }
+      setUrlInput(active.url);
+      setKeyInput(active.anonKey);
+      setProjectRefInput(active.projectRef);
+      setManagementTokenInput(active.managementToken);
     } else {
       setPasswordInput('');
       setPasswordError(null);
@@ -65,11 +82,21 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
 
     const cleanUrl = urlInput.trim();
     const cleanKey = keyInput.trim();
+    const cleanRef = projectRefInput.trim();
+    const cleanToken = managementTokenInput.trim();
 
-    if (cleanUrl && cleanKey) {
-      updateGlobalCredentials(cleanUrl, cleanKey);
-    } else {
-      updateGlobalCredentials(null, null);
+    updateGlobalCredentials(cleanUrl, cleanKey, cleanRef, cleanToken);
+
+    try {
+      await setDoc(doc(db, 'app_config', 'supabase_credentials'), {
+        url: cleanUrl || SUPABASE_URL,
+        anonKey: cleanKey || SUPABASE_ANON_KEY,
+        projectRef: cleanRef || DEFAULT_PROJECT_REF,
+        managementToken: cleanToken || DEFAULT_MANAGEMENT_TOKEN,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Error guardando credenciales en Firestore:', err);
     }
 
     setIsSaving(false);
@@ -79,9 +106,24 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
 
   const handleResetToPlaceholders = async () => {
     setIsSaving(true);
-    updateGlobalCredentials(null, null);
+    updateGlobalCredentials(null, null, DEFAULT_PROJECT_REF, DEFAULT_MANAGEMENT_TOKEN);
     setUrlInput('');
     setKeyInput('');
+    setProjectRefInput(DEFAULT_PROJECT_REF);
+    setManagementTokenInput(DEFAULT_MANAGEMENT_TOKEN);
+
+    try {
+      await setDoc(doc(db, 'app_config', 'supabase_credentials'), {
+        url: SUPABASE_URL,
+        anonKey: SUPABASE_ANON_KEY,
+        projectRef: DEFAULT_PROJECT_REF,
+        managementToken: DEFAULT_MANAGEMENT_TOKEN,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Error reseteando credenciales en Firestore:', err);
+    }
+
     setIsSaving(false);
     onSaved();
   };
@@ -165,6 +207,11 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
                 <p className="text-xs text-slate-400/80 font-mono tracking-wide select-none">
                   Generado en GAIS cuenta AC2
                 </p>
+                {/* Badge de consumo de Egress justo debajo de la leyenda */}
+                <EgressUsageBadge
+                  projectRef={projectRefInput}
+                  managementToken={managementTokenInput}
+                />
               </div>
             </form>
           </div>
@@ -244,7 +291,7 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
                   placeholder="https://xyzcompany.supabase.co"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition font-mono"
                 />
               </div>
 
@@ -262,11 +309,48 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <HardDrive className="w-4 h-4 text-orange-400" />
+                  PROJECT_REF (Project Reference ID)
+                </label>
+                <input
+                  type="text"
+                  placeholder="lzozhhcoxvlqnoufgdcz"
+                  value={projectRefInput}
+                  onChange={(e) => setProjectRefInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-orange-400" />
+                  SUPABASE_MANAGEMENT_TOKEN (Personal Access Token PAT)
+                </label>
+                <input
+                  type="password"
+                  placeholder="sbp_..."
+                  value={managementTokenInput}
+                  onChange={(e) => setManagementTokenInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition font-mono"
+                />
+              </div>
+
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-300 text-xs flex items-center gap-2">
                 <Cloud className="w-4 h-4 text-blue-400 shrink-0" />
                 <span>
                   Las credenciales que guardes aquí se almacenan en <strong>Firestore</strong> para que la app publicada mantenga tu proyecto de Supabase activo permanentemente para todos tus usuarios.
                 </span>
+              </div>
+
+              {/* Consulta de uso de Egress dentro del formulario */}
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center">
+                <p className="text-xs font-semibold text-slate-300 mb-1">Métricas de Consumo</p>
+                <EgressUsageBadge
+                  projectRef={projectRefInput}
+                  managementToken={managementTokenInput}
+                />
               </div>
 
               <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-800">
@@ -315,3 +399,4 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
     </div>
   );
 };
+

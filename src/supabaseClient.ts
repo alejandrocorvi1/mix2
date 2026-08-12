@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './lib/firebase';
 
 // ============================================================================
 // Configuración de nodo de datos predeterminado
@@ -9,16 +11,28 @@ export const CORE_APP_SIGNATURE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 
 export const SUPABASE_URL = CORE_NODE_ENDPOINT;
 export const SUPABASE_ANON_KEY = CORE_APP_SIGNATURE;
+
+export const DEFAULT_PROJECT_REF = "lzozhhcoxvlqnoufgdcz";
+export const DEFAULT_MANAGEMENT_TOKEN = "sbp_0a3e7aadc7ad8d0215629abf011358cac58d8ccc";
 // ============================================================================
 
 const BUCKET_NAME = 'temp-files';
 
 let inMemoryUrl: string | null = null;
 let inMemoryKey: string | null = null;
+let inMemoryProjectRef: string | null = null;
+let inMemoryManagementToken: string | null = null;
 
-export function updateGlobalCredentials(url: string | null, anonKey: string | null) {
+export function updateGlobalCredentials(
+  url: string | null,
+  anonKey: string | null,
+  projectRef: string | null = null,
+  managementToken: string | null = null
+) {
   inMemoryUrl = url;
   inMemoryKey = anonKey;
+  inMemoryProjectRef = projectRef;
+  inMemoryManagementToken = managementToken;
 
   if (url && anonKey) {
     localStorage.setItem('TEMPFILES_SUPABASE_URL', url);
@@ -28,6 +42,18 @@ export function updateGlobalCredentials(url: string | null, anonKey: string | nu
     localStorage.removeItem('TEMPFILES_SUPABASE_ANON_KEY');
   }
 
+  if (projectRef) {
+    localStorage.setItem('TEMPFILES_SUPABASE_PROJECT_REF', projectRef);
+  } else {
+    localStorage.removeItem('TEMPFILES_SUPABASE_PROJECT_REF');
+  }
+
+  if (managementToken) {
+    localStorage.setItem('TEMPFILES_SUPABASE_MANAGEMENT_TOKEN', managementToken);
+  } else {
+    localStorage.removeItem('TEMPFILES_SUPABASE_MANAGEMENT_TOKEN');
+  }
+
   resetSupabaseClient();
 }
 
@@ -35,9 +61,13 @@ export function updateGlobalCredentials(url: string | null, anonKey: string | nu
 export function getActiveCredentials() {
   const savedUrl = localStorage.getItem('TEMPFILES_SUPABASE_URL');
   const savedKey = localStorage.getItem('TEMPFILES_SUPABASE_ANON_KEY');
+  const savedRef = localStorage.getItem('TEMPFILES_SUPABASE_PROJECT_REF');
+  const savedToken = localStorage.getItem('TEMPFILES_SUPABASE_MANAGEMENT_TOKEN');
 
   const url = inMemoryUrl || savedUrl || import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
   const anonKey = inMemoryKey || savedKey || import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
+  const projectRef = inMemoryProjectRef || savedRef || DEFAULT_PROJECT_REF;
+  const managementToken = inMemoryManagementToken || savedToken || DEFAULT_MANAGEMENT_TOKEN;
 
   const isConfigured = Boolean(
     url && 
@@ -47,7 +77,85 @@ export function getActiveCredentials() {
     url.includes('supabase.co')
   );
 
-  return { url, anonKey, isConfigured };
+  return { url, anonKey, projectRef, managementToken, isConfigured };
+}
+
+let firestoreSyncUnsubscribe: (() => void) | null = null;
+
+/**
+ * Escucha en tiempo real el documento 'app_config/supabase_credentials' en Firestore.
+ * Si no existe, lo crea con las credenciales por defecto.
+ * Si existe, sincroniza las credenciales en memoria y localStorage.
+ */
+export function initSupabaseFirestoreSync() {
+  if (firestoreSyncUnsubscribe) return;
+
+  try {
+    const credsDocRef = doc(db, 'app_config', 'supabase_credentials');
+    firestoreSyncUnsubscribe = onSnapshot(credsDocRef, (docSnap) => {
+      if (!docSnap.exists()) {
+        setDoc(credsDocRef, {
+          url: SUPABASE_URL,
+          anonKey: SUPABASE_ANON_KEY,
+          projectRef: DEFAULT_PROJECT_REF,
+          managementToken: DEFAULT_MANAGEMENT_TOKEN,
+          updatedAt: serverTimestamp()
+        }).catch((err) => {
+          console.warn('Error al inicializar app_config/supabase_credentials en Firestore:', err);
+        });
+      } else {
+        const data = docSnap.data();
+        if (data) {
+          updateGlobalCredentials(
+            data.url || SUPABASE_URL,
+            data.anonKey || SUPABASE_ANON_KEY,
+            data.projectRef || DEFAULT_PROJECT_REF,
+            data.managementToken || DEFAULT_MANAGEMENT_TOKEN
+          );
+        }
+      }
+    }, (err) => {
+      console.warn('Error en listener de Firestore supabase_credentials:', err);
+    });
+  } catch (err) {
+    console.warn('Fallo al iniciar sincronización de Firestore:', err);
+  }
+}
+
+/**
+ * Consulta las métricas de uso de Egress llamando al servidor /api/supabase-usage
+ */
+export async function fetchSupabaseEgressUsage(
+  projectRef?: string,
+  managementToken?: string
+): Promise<{
+  success: boolean;
+  percentage?: number;
+  usedGb?: number;
+  totalGb?: number;
+  error?: string;
+}> {
+  const active = getActiveCredentials();
+  const ref = projectRef || active.projectRef || DEFAULT_PROJECT_REF;
+  const token = managementToken || active.managementToken || DEFAULT_MANAGEMENT_TOKEN;
+
+  try {
+    const response = await fetch(`/api/supabase-usage?ref=${encodeURIComponent(ref)}&token=${encodeURIComponent(token)}`);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: errData.error || `Error ${response.status}: No se pudo obtener métricas de Supabase`
+      };
+    }
+    const data = await response.json();
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'Error de red al consultar el uso de Supabase'
+    };
+  }
 }
 
 // Instancia de Supabase Client

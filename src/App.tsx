@@ -5,6 +5,7 @@ import { InstructionsModal } from './components/InstructionsModal';
 import { InitialScreen } from './components/TwinLink/InitialScreen';
 import { SharedPanel } from './components/TwinLink/SharedPanel';
 import { normalizeRoomCode } from './lib/device';
+import { initSupabaseFirestoreSync } from './supabaseClient';
 import { Settings } from 'lucide-react';
 
 export default function App() {
@@ -19,8 +20,10 @@ export default function App() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Detect URL Params on Load (e.g., ?code=ABC%20123 or ?file=...&name=...)
+  // Initialize Supabase credentials sync with Firestore & Detect URL Params on Load
   useEffect(() => {
+    initSupabaseFirestoreSync();
+
     const handleUrlParams = () => {
       const searchParams = new URLSearchParams(window.location.search);
       const fileParam = searchParams.get('file');

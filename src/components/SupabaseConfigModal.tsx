@@ -49,6 +49,12 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
 
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Estados para la confirmación de reinicio del contador del PAT
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
+
   // Sync inputs with active credentials when opening
   useEffect(() => {
     if (isOpen) {
@@ -57,11 +63,19 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       setKeyInput(active.anonKey);
       setProjectRefInput(active.projectRef);
       setManagementTokenInput(active.managementToken);
+      setShowResetConfirm(false);
+      setResetPasswordInput('');
+      setResetError(null);
+      setResetSuccessMsg(null);
     } else {
       setPasswordInput('');
       setPasswordError(null);
       setIsAuthenticated(false);
       setShowPassword(false);
+      setShowResetConfirm(false);
+      setResetPasswordInput('');
+      setResetError(null);
+      setResetSuccessMsg(null);
     }
   }, [isOpen]);
 
@@ -108,6 +122,22 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     setIsSaving(false);
     onSaved();
     onClose();
+  };
+
+  const handleConfirmResetCounter = () => {
+    const cleanInput = resetPasswordInput.trim();
+    if (cleanInput === REQUIRED_ADMIN_PASSWORD || cleanInput === '1234') {
+      const now = Date.now();
+      updateGlobalCredentials(urlInput.trim(), keyInput.trim(), projectRefInput.trim(), managementTokenInput.trim(), now);
+      setDoc(doc(db, 'app_config', 'supabase_credentials'), { tokenCreatedAt: now }, { merge: true });
+      setShowResetConfirm(false);
+      setResetPasswordInput('');
+      setResetError(null);
+      setResetSuccessMsg('¡Contador del PAT reiniciado exitosamente a 0 días transcurridos!');
+      setTimeout(() => setResetSuccessMsg(null), 4000);
+    } else {
+      setResetError('Clave incorrecta. Por favor ingrese la clave válida.');
+    }
   };
 
   const handleResetToPlaceholders = async () => {
@@ -366,41 +396,113 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
                 const patStatus = getPatTokenStatus(current.tokenCreatedAt);
                 const isUrgent = patStatus.daysUntilWarning <= 0;
                 return (
-                  <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
-                    isUrgent
-                      ? 'bg-red-500/10 border-red-500/30 text-red-200'
-                      : patStatus.daysUntilWarning <= 30
-                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                      : 'bg-slate-950 border-slate-800 text-slate-300'
-                  }`}>
-                    <div className="flex items-start gap-2.5">
-                      <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${isUrgent ? 'text-red-400' : 'text-amber-400'}`} />
-                      <div>
-                        <p className="font-semibold text-slate-200">
-                          {isUrgent
-                            ? '¡Alerta Activa! Renovar SUPABASE MANAGEMENT TOKEN'
-                            : `Cuenta Regresiva PAT: ${patStatus.daysUntilWarning} días restantes para renovación`}
-                        </p>
-                        <p className="text-[11px] opacity-80 mt-0.5 leading-snug">
-                          {isUrgent
-                            ? 'Han transcurrido 350+ días desde la creación del token. El cartel emergente está activo al abrir la app.'
-                            : `Faltan ${patStatus.daysUntilWarning} días para la alerta de los 350 días (vigencia total: ${patStatus.totalDaysRemaining} días restantes).`}
-                        </p>
+                  <div className="space-y-2">
+                    {resetSuccessMsg && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs rounded-xl flex items-center gap-2 animate-fadeIn font-semibold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>{resetSuccessMsg}</span>
                       </div>
+                    )}
+
+                    <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                      isUrgent
+                        ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                        : patStatus.daysUntilWarning <= 30
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                        : 'bg-slate-950 border-slate-800 text-slate-300'
+                    }`}>
+                      <div className="flex items-start gap-2.5">
+                        <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${isUrgent ? 'text-red-400' : 'text-amber-400'}`} />
+                        <div>
+                          <p className="font-semibold text-slate-200">
+                            {isUrgent
+                              ? '¡Alerta Activa! Renovar SUPABASE MANAGEMENT TOKEN'
+                              : `Cuenta Regresiva PAT: ${patStatus.daysUntilWarning} días restantes para renovación`}
+                          </p>
+                          <p className="text-[11px] opacity-80 mt-0.5 leading-snug">
+                            {isUrgent
+                              ? 'Han transcurrido 350+ días desde la creación del token. El cartel emergente está activo al abrir la app.'
+                              : `Faltan ${patStatus.daysUntilWarning} días para la alerta de los 350 días (vigencia total: ${patStatus.totalDaysRemaining} días restantes).`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {!showResetConfirm ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowResetConfirm(true);
+                            setResetPasswordInput('');
+                            setResetError(null);
+                          }}
+                          className="px-3 py-1.5 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg shadow-md transition shrink-0 self-end sm:self-auto"
+                          title="Reiniciar contador a 0 días transcurridos"
+                        >
+                          Reiniciar Contador
+                        </button>
+                      ) : null}
                     </div>
-                    
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const now = Date.now();
-                        updateGlobalCredentials(urlInput.trim(), keyInput.trim(), projectRefInput.trim(), managementTokenInput.trim(), now);
-                        setDoc(doc(db, 'app_config', 'supabase_credentials'), { tokenCreatedAt: now }, { merge: true });
-                      }}
-                      className="px-2.5 py-1.5 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition shrink-0 self-end sm:self-auto"
-                      title="Reiniciar contador a 0 días transcurridos"
-                    >
-                      Reiniciar Contador
-                    </button>
+
+                    {showResetConfirm && (
+                      <div className="p-3.5 bg-slate-950 border border-amber-500/40 rounded-xl space-y-2.5 animate-fadeIn text-xs text-slate-100 shadow-xl">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Confirmación de Reinicio de Contador</span>
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowResetConfirm(false);
+                              setResetPasswordInput('');
+                              setResetError(null);
+                            }}
+                            className="text-slate-400 hover:text-slate-200 text-xs px-2 py-0.5 rounded hover:bg-slate-800 transition"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          Ingresa la clave de administración del panel para confirmar el reinicio del contador a 0 días:
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="password"
+                            value={resetPasswordInput}
+                            onChange={(e) => {
+                              setResetPasswordInput(e.target.value);
+                              setResetError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleConfirmResetCounter();
+                              }
+                            }}
+                            placeholder="Ingresa la clave..."
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={handleConfirmResetCounter}
+                            className="px-3.5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg transition shrink-0 shadow-md flex items-center justify-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Aceptar reiniciar contador</span>
+                          </button>
+                        </div>
+
+                        {resetError && (
+                          <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[11px] font-medium flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                            <span>{resetError}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })()}

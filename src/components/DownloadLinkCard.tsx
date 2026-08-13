@@ -214,7 +214,7 @@ export const DownloadLinkCard: React.FC<DownloadLinkCardProps> = ({
             </>
           ) : (
             <>
-              <Flame className="w-4 h-4 fill-slate-950" />
+              <Download className="w-4 h-4" />
               <span>Descargar y Autodestruir Ahora</span>
             </>
           )}

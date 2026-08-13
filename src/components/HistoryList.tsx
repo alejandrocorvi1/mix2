@@ -599,7 +599,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 </>
               ) : (
                 <>
-                  <Flame className="w-4 h-4 fill-slate-950" />
+                  <Download className="w-4 h-4" />
                   <span>
                     {fileGroups.length === 1
                       ? (fileGroups[0]?.isFragmented

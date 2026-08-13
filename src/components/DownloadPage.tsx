@@ -161,7 +161,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({
                   </>
                 ) : (
                   <>
-                    <Flame className="w-5 h-5 fill-slate-950" />
+                    <Download className="w-5 h-5" />
                     Probar Descarga y Autodestrucción de Supabase
                   </>
                 )}

@@ -599,8 +599,17 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
-                  <span>
+                  <Download className="w-4 h-4 shrink-0" />
+                  {/* Vista Móvil (< sm): Centrado en 2 líneas */}
+                  <div className="flex flex-col items-center justify-center text-center leading-tight sm:hidden">
+                    <span className="font-bold">Descargar y Eliminar</span>
+                    <span className="text-xs opacity-90 font-medium">
+                      {fileGroups.length === 1 ? '(1 archivo)' : `(${fileGroups.length} archivos)`}
+                    </span>
+                  </div>
+
+                  {/* Vista PC (>= sm): En 1 sola línea sin modificación */}
+                  <span className="hidden sm:inline">
                     {fileGroups.length === 1
                       ? (fileGroups[0]?.isFragmented
                           ? `Reensamblar, Descargar y Eliminar ${fileGroups[0].displayName}`

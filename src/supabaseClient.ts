@@ -2,6 +2,10 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './lib/firebase';
+import { 
+  getEgressUsageFromFirestore, 
+  recordEgressBytes 
+} from './services/telemetryService';
 
 // ============================================================================
 // Configuración de nodo de datos predeterminado
@@ -165,11 +169,11 @@ export function initSupabaseFirestoreSync() {
 }
 
 /**
- * Consulta las métricas de uso de Egress llamando al servidor /api/supabase-usage
+ * Consulta las métricas de uso de Egress directamente desde la colección de telemetría de Firestore
  */
 export async function fetchSupabaseEgressUsage(
-  projectRef?: string,
-  managementToken?: string
+  _projectRef?: string,
+  _managementToken?: string
 ): Promise<{
   success: boolean;
   percentage?: number;
@@ -177,27 +181,7 @@ export async function fetchSupabaseEgressUsage(
   totalGb?: number;
   error?: string;
 }> {
-  const active = getActiveCredentials();
-  const ref = projectRef || active.projectRef || DEFAULT_PROJECT_REF;
-  const token = managementToken || active.managementToken || DEFAULT_MANAGEMENT_TOKEN;
-
-  try {
-    const response = await fetch(`/api/supabase-usage?ref=${encodeURIComponent(ref)}&token=${encodeURIComponent(token)}`);
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      return {
-        success: false,
-        error: errData.error || `Error ${response.status}: No se pudo obtener métricas de Supabase`
-      };
-    }
-    const data = await response.json();
-    return data;
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err?.message || 'Error de red al consultar el uso de Supabase'
-    };
-  }
+  return await getEgressUsageFromFirestore();
 }
 
 // Instancia de Supabase Client
@@ -471,6 +455,11 @@ export async function downloadAndRemoveFromSupabase(
         success: false,
         error: `No se pudo descargar el archivo (${downloadErrorMsg || 'Error de red o archivo inexistente'}). Es posible que las credenciales de Supabase sean incorrectas o que el archivo haya expirado.`
       };
+    }
+
+    // Registro de telemetría de Egress en Firestore
+    if (blobData.size > 0) {
+      recordEgressBytes(blobData.size).catch((e) => console.warn('Error grabando telemetría:', e));
     }
 
     // 4. REQUISITO 3: Eliminar inmediatamente el archivo del bucket de Supabase usando remove()

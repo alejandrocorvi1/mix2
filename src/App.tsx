@@ -58,6 +58,9 @@ export default function App() {
     const normalized = normalizeRoomCode(code);
     setActiveRoomCode(normalized);
     setDownloadTarget(null);
+    try {
+      localStorage.setItem('twinlink_active_room', normalized);
+    } catch {}
 
     // Update URL parameter
     const newUrl = `${window.location.pathname}?code=${encodeURIComponent(normalized)}`;
@@ -68,6 +71,9 @@ export default function App() {
     setActiveRoomCode(null);
     setInitialUrlCode('');
     setDownloadTarget(null);
+    try {
+      localStorage.removeItem('twinlink_active_room');
+    } catch {}
     window.history.pushState({}, '', window.location.pathname);
   };
 

@@ -71,12 +71,34 @@
         "downloaded": { "type": "boolean" }
       },
       "required": ["filePath", "fileName"]
+    },
+    "global_download": {
+      "title": "Global Download Log",
+      "description": "Log record of file downloaded across any room",
+      "type": "object",
+      "properties": {
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "roomCode": { "type": "string" },
+        "device": { "type": "string" },
+        "fileName": { "type": "string" },
+        "filePath": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "fileSizeFormatted": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fecha", "hora", "roomCode", "device", "fileSize"]
     }
   },
   "firestore": {
     "/app_config/{document}": {
       "schema": "app_config",
       "description": "App global configuration"
+    },
+    "/global_downloads/{downloadId}": {
+      "schema": "global_download",
+      "description": "Global log of file downloads across all rooms"
     },
     "/sessions/{sessionId}": {
       "schema": "session",

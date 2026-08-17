@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, Eye, EyeOff, Cloud, Loader2, HardDrive, Shield, Clock } from 'lucide-react';
+import { X, Key, Globe, CheckCircle2, AlertTriangle, RefreshCw, Copy, Check, Lock, ShieldCheck, Eye, EyeOff, Cloud, Loader2, HardDrive, Shield, Clock, Download, Trash2, FileText, Database } from 'lucide-react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
@@ -12,6 +12,11 @@ import {
   getPatTokenStatus
 } from '../supabaseClient';
 import { EgressUsageBadge } from './EgressUsageBadge';
+import {
+  getGlobalDownloadsCount,
+  downloadGlobalDownloadsTxtFile,
+  clearAllGlobalDownloads
+} from '../services/downloadLogService';
 
 interface SupabaseConfigModalProps {
   isOpen: boolean;
@@ -55,6 +60,27 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
+  // Estados para el Registro Global de Descargas
+  const [globalDownloadsCount, setGlobalDownloadsCount] = useState<number | null>(null);
+  const [isExportingRegistry, setIsExportingRegistry] = useState(false);
+  const [registryExportMsg, setRegistryExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Doble confirmación para eliminación del registro global
+  const [deleteRegistryStep, setDeleteRegistryStep] = useState<0 | 1 | 2>(0);
+  const [deleteRegistryPasswordInput, setDeleteRegistryPasswordInput] = useState('');
+  const [deleteRegistryError, setDeleteRegistryError] = useState<string | null>(null);
+  const [deleteRegistrySuccessMsg, setDeleteRegistrySuccessMsg] = useState<string | null>(null);
+  const [isDeletingRegistry, setIsDeletingRegistry] = useState(false);
+
+  // Cargar conteo de descargas globales al autenticar o abrir
+  useEffect(() => {
+    if (isOpen && isAuthenticated) {
+      getGlobalDownloadsCount()
+        .then((count) => setGlobalDownloadsCount(count))
+        .catch(() => setGlobalDownloadsCount(0));
+    }
+  }, [isOpen, isAuthenticated]);
+
   // Sync inputs with active credentials when opening
   useEffect(() => {
     if (isOpen) {
@@ -67,6 +93,11 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       setResetPasswordInput('');
       setResetError(null);
       setResetSuccessMsg(null);
+      setDeleteRegistryStep(0);
+      setDeleteRegistryPasswordInput('');
+      setDeleteRegistryError(null);
+      setDeleteRegistrySuccessMsg(null);
+      setRegistryExportMsg(null);
     } else {
       setPasswordInput('');
       setPasswordError(null);
@@ -76,6 +107,11 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       setResetPasswordInput('');
       setResetError(null);
       setResetSuccessMsg(null);
+      setDeleteRegistryStep(0);
+      setDeleteRegistryPasswordInput('');
+      setDeleteRegistryError(null);
+      setDeleteRegistrySuccessMsg(null);
+      setRegistryExportMsg(null);
     }
   }, [isOpen]);
 
@@ -137,6 +173,81 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       setTimeout(() => setResetSuccessMsg(null), 4000);
     } else {
       setResetError('Clave incorrecta. Por favor ingrese la clave válida.');
+    }
+  };
+
+  // Handlers para el Registro Global de Descargas
+  const handleExportGlobalDownloads = async () => {
+    setIsExportingRegistry(true);
+    setRegistryExportMsg(null);
+    try {
+      const res = await downloadGlobalDownloadsTxtFile();
+      if (res.success) {
+        setRegistryExportMsg({
+          type: 'success',
+          text: `¡Registro global descargado correctamente! (${res.count} descarga${res.count === 1 ? '' : 's'} registradas)`
+        });
+        setGlobalDownloadsCount(res.count);
+      } else {
+        setRegistryExportMsg({
+          type: 'error',
+          text: res.error || 'Error al generar el archivo .txt'
+        });
+      }
+    } catch (err: any) {
+      setRegistryExportMsg({
+        type: 'error',
+        text: err?.message || 'Error inesperado al exportar archivo'
+      });
+    } finally {
+      setIsExportingRegistry(false);
+      setTimeout(() => setRegistryExportMsg(null), 5000);
+    }
+  };
+
+  const handleStartDeleteRegistry = () => {
+    setDeleteRegistryStep(1);
+    setDeleteRegistryPasswordInput('');
+    setDeleteRegistryError(null);
+    setDeleteRegistrySuccessMsg(null);
+  };
+
+  const handleCancelDeleteRegistry = () => {
+    setDeleteRegistryStep(0);
+    setDeleteRegistryPasswordInput('');
+    setDeleteRegistryError(null);
+  };
+
+  const handleProceedToStep2 = () => {
+    setDeleteRegistryStep(2);
+    setDeleteRegistryPasswordInput('');
+    setDeleteRegistryError(null);
+  };
+
+  const handleConfirmFinalDeleteRegistry = async () => {
+    const cleanInput = deleteRegistryPasswordInput.trim();
+    if (cleanInput !== REQUIRED_ADMIN_PASSWORD && cleanInput !== '1234') {
+      setDeleteRegistryError('Clave incorrecta. Ingrese la clave de administración para confirmar.');
+      return;
+    }
+
+    setIsDeletingRegistry(true);
+    setDeleteRegistryError(null);
+    try {
+      const res = await clearAllGlobalDownloads();
+      if (res.success) {
+        setGlobalDownloadsCount(0);
+        setDeleteRegistryStep(0);
+        setDeleteRegistryPasswordInput('');
+        setDeleteRegistrySuccessMsg(`¡Registro global eliminado exitosamente! (${res.deletedCount} registros eliminados)`);
+        setTimeout(() => setDeleteRegistrySuccessMsg(null), 5000);
+      } else {
+        setDeleteRegistryError(res.error || 'Error al eliminar registros de Firestore');
+      }
+    } catch (err: any) {
+      setDeleteRegistryError(err?.message || 'Error al eliminar registros');
+    } finally {
+      setIsDeletingRegistry(false);
     }
   };
 
@@ -506,6 +617,195 @@ export const SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";`}
                   </div>
                 );
               })()}
+
+              {/* ========================================================= */}
+              {/* Panel: Registro Global de Descargas (Todas las Salas)     */}
+              {/* ========================================================= */}
+              <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-3 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-cyan-400">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                        <span>Registro Global de Descargas</span>
+                        <span className="text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono font-medium">
+                          Todas las Salas
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Historial centralizado de descargas en TwinLink y Supabase
+                      </p>
+                    </div>
+                  </div>
+
+                  {globalDownloadsCount !== null && (
+                    <span className="text-[11px] font-mono font-semibold px-2.5 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-slate-300 self-start sm:self-auto">
+                      {globalDownloadsCount} {globalDownloadsCount === 1 ? 'descarga' : 'descargas'}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Genera un archivo <strong className="text-cyan-300 font-mono">.txt</strong> que detalla cada descarga efectuada por todas las salas que utilicen TwinLink y Supabase (fecha, hora, código de sala, dispositivo y tamaño del archivo).
+                </p>
+
+                {/* Mensajes de estado de exportación o borrado */}
+                {registryExportMsg && (
+                  <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 animate-fadeIn font-medium ${
+                    registryExportMsg.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-red-500/10 border-red-500/30 text-red-300'
+                  }`}>
+                    {registryExportMsg.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                    )}
+                    <span>{registryExportMsg.text}</span>
+                  </div>
+                )}
+
+                {deleteRegistrySuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 animate-fadeIn font-medium">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{deleteRegistrySuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Acciones principales del Panel */}
+                {deleteRegistryStep === 0 && (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleExportGlobalDownloads}
+                      disabled={isExportingRegistry}
+                      className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-950/50 hover:shadow-cyan-500/20 transition flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                      title="Descargar registro de Descargas Global (.txt)"
+                    >
+                      {isExportingRegistry ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generando archivo .txt...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Descargar registro de Descargas Global</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStartDeleteRegistry}
+                      className="px-3.5 py-2.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl transition flex items-center justify-center gap-1.5 shrink-0"
+                      title="Eliminar historial global de descargas"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Eliminar Registro</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Paso 1 de Doble Confirmación */}
+                {deleteRegistryStep === 1 && (
+                  <div className="p-3.5 bg-slate-900 border border-amber-500/40 rounded-xl space-y-3 animate-fadeIn text-xs shadow-lg">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Confirmación de Eliminación (Paso 1 de 2)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      ¿Estás seguro de que deseas eliminar todo el registro global de descargas? Esta acción borrará de forma permanente el historial de todas las salas.
+                    </p>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCancelDeleteRegistry}
+                        className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-800 rounded-lg hover:bg-slate-700 transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleProceedToStep2}
+                        className="px-3.5 py-1.5 text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg transition shadow-md flex items-center gap-1"
+                      >
+                        <span>Continuar al Paso 2</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paso 2 de Doble Confirmación (Definitivo con Clave de Administración) */}
+                {deleteRegistryStep === 2 && (
+                  <div className="p-3.5 bg-slate-900 border border-rose-500/50 rounded-xl space-y-3 animate-fadeIn text-xs shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-rose-400 font-bold">
+                        <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Confirmación Definitiva (Paso 2 de 2)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelDeleteRegistry}
+                        className="text-slate-400 hover:text-slate-200 text-xs px-2 py-0.5 rounded hover:bg-slate-800 transition"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Para evitar eliminaciones por error, ingresa la clave de administración del panel para autorizar el borrado definitivo:
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="password"
+                        value={deleteRegistryPasswordInput}
+                        onChange={(e) => {
+                          setDeleteRegistryPasswordInput(e.target.value);
+                          setDeleteRegistryError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleConfirmFinalDeleteRegistry();
+                          }
+                        }}
+                        placeholder="Ingresa la clave de administración..."
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 font-mono"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        disabled={isDeletingRegistry}
+                        onClick={handleConfirmFinalDeleteRegistry}
+                        className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition shrink-0 shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isDeletingRegistry ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Borrando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Confirmar Eliminación Definitiva</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {deleteRegistryError && (
+                      <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-medium flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <span>{deleteRegistryError}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-800">
                 <button

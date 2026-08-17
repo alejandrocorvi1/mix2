@@ -52,7 +52,9 @@ export const DownloadLinkCard: React.FC<DownloadLinkCardProps> = ({
     if (isExpired) return;
     setIsDownloading(true);
     try {
-      const result = await downloadAndRemoveFromSupabase(fileInfo.filePath, fileInfo.fileName);
+      const result = await downloadAndRemoveFromSupabase(fileInfo.filePath, fileInfo.fileName, {
+        fileSize: fileInfo.fileSize
+      });
       if (result.success && result.blob) {
         const url = window.URL.createObjectURL(result.blob);
         const a = document.createElement('a');

@@ -6,6 +6,10 @@ import {
   getEgressUsageFromFirestore, 
   recordEgressBytes 
 } from './services/telemetryService';
+import {
+  recordGlobalDownload,
+  getDeviceDescription
+} from './services/downloadLogService';
 
 // ============================================================================
 // Configuración de nodo de datos predeterminado
@@ -375,7 +379,12 @@ export async function uploadToSupabaseBucket(file: File): Promise<{
  */
 export async function downloadAndRemoveFromSupabase(
   filePath: string,
-  fileName: string
+  fileName: string,
+  options?: {
+    roomCode?: string;
+    fileSize?: number;
+    device?: string;
+  }
 ): Promise<{
   success: boolean;
   blob?: Blob;
@@ -396,6 +405,15 @@ export async function downloadAndRemoveFromSupabase(
 
     // Convertir File a Blob
     const blob = new Blob([mockData.file], { type: mockData.file.type });
+
+    // Registro de descarga global en simulación
+    recordGlobalDownload({
+      fileName,
+      filePath,
+      fileSize: blob.size,
+      roomCode: options?.roomCode || localStorage.getItem('twinlink_active_room') || 'Sin código / Enlace Directo',
+      device: options?.device || getDeviceDescription()
+    }).catch((e) => console.warn('Error registrando descarga global:', e));
 
     // REQUISITO 3: Eliminar inmediatamente
     mockStorage.delete(filePath);
@@ -460,6 +478,15 @@ export async function downloadAndRemoveFromSupabase(
     // Registro de telemetría de Egress en Firestore
     if (blobData.size > 0) {
       recordEgressBytes(blobData.size).catch((e) => console.warn('Error grabando telemetría:', e));
+
+      // Registro de Descarga Global en Firestore para todas las salas
+      recordGlobalDownload({
+        fileName,
+        filePath,
+        fileSize: blobData.size,
+        roomCode: options?.roomCode || localStorage.getItem('twinlink_active_room') || 'Sin código / Enlace Directo',
+        device: options?.device || getDeviceDescription()
+      }).catch((e) => console.warn('Error registrando descarga global:', e));
     }
 
     // 4. REQUISITO 3: Eliminar inmediatamente el archivo del bucket de Supabase usando remove()

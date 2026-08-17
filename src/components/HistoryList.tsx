@@ -263,7 +263,10 @@ export const HistoryList: React.FC<HistoryListProps> = ({
         let allPartsSuccess = true;
 
         for (const partFile of group.files) {
-          const result = await downloadAndRemoveFromSupabase(partFile.filePath, partFile.fileName);
+          const result = await downloadAndRemoveFromSupabase(partFile.filePath, partFile.fileName, {
+            roomCode: roomCode || 'General',
+            fileSize: partFile.fileSize
+          });
           if (result.success && result.blob) {
             blobs.push(result.blob);
           } else {

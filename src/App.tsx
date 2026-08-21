@@ -9,6 +9,9 @@ import { normalizeRoomCode } from './lib/device';
 import { initSupabaseFirestoreSync, getPatTokenStatus } from './supabaseClient';
 import { Settings } from 'lucide-react';
 
+const LAST_FOCUSED_ROOM_KEY = 'twinlink_last_focused_room';
+const WINDOW_ID_KEY = 'twinlink_window_id';
+
 export default function App() {
   // Direct Download Page state (if opening legacy file URL)
   const [downloadTarget, setDownloadTarget] = useState<{ filePath: string; fileName: string } | null>(null);
@@ -26,20 +29,55 @@ export default function App() {
   const patStatus = getPatTokenStatus();
   const isPatModalOpen = patStatus.isWarningRequired && !isPatModalDismissedSession;
 
-  // Initialize Supabase credentials sync with Firestore & Detect URL Params on Load
+  // Initialize Supabase credentials sync, detect URL params and remember the last focused room.
   useEffect(() => {
     initSupabaseFirestoreSync();
+
+    let windowId = '';
+    try {
+      windowId = sessionStorage.getItem(WINDOW_ID_KEY) || '';
+      if (!windowId) {
+        windowId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(WINDOW_ID_KEY, windowId);
+      }
+    } catch {}
+
+    const rememberFocusedRoom = () => {
+      try {
+        const currentRoom = localStorage.getItem('twinlink_active_room');
+        if (!currentRoom) return;
+        localStorage.setItem(
+          LAST_FOCUSED_ROOM_KEY,
+          JSON.stringify({ roomCode: currentRoom, windowId, timestamp: Date.now() })
+        );
+      } catch {}
+    };
 
     const handleUrlParams = () => {
       const searchParams = new URLSearchParams(window.location.search);
       const fileParam = searchParams.get('file');
       const nameParam = searchParams.get('name');
       const codeParam = searchParams.get('code');
+      const sharedParam = searchParams.get('shared');
 
       if (codeParam) {
         const normCode = normalizeRoomCode(codeParam);
         setInitialUrlCode(normCode);
         setActiveRoomCode(normCode);
+      } else if (sharedParam === 'true') {
+        // Web Share Target opens a new context. The browser does not expose the
+        // originating window, so use the room most recently focused by a TwinLink window.
+        try {
+          const raw = localStorage.getItem(LAST_FOCUSED_ROOM_KEY);
+          if (raw) {
+            const saved = JSON.parse(raw);
+            if (saved?.roomCode) {
+              const normCode = normalizeRoomCode(saved.roomCode);
+              setInitialUrlCode(normCode);
+              setActiveRoomCode(normCode);
+            }
+          }
+        } catch {}
       } else if (fileParam) {
         setDownloadTarget({
           filePath: decodeURIComponent(fileParam),
@@ -49,9 +87,38 @@ export default function App() {
     };
 
     handleUrlParams();
+    rememberFocusedRoom();
+
+    window.addEventListener('focus', rememberFocusedRoom);
+    document.addEventListener('visibilitychange', rememberFocusedRoom);
     window.addEventListener('popstate', handleUrlParams);
-    return () => window.removeEventListener('popstate', handleUrlParams);
+
+    return () => {
+      window.removeEventListener('focus', rememberFocusedRoom);
+      document.removeEventListener('visibilitychange', rememberFocusedRoom);
+      window.removeEventListener('popstate', handleUrlParams);
+    };
   }, []);
+
+  // Keep the last focused room updated whenever the active room changes.
+  useEffect(() => {
+    if (!activeRoomCode) return;
+    try {
+      let windowId = sessionStorage.getItem(WINDOW_ID_KEY) || '';
+      if (!windowId) {
+        windowId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(WINDOW_ID_KEY, windowId);
+      }
+      localStorage.setItem(
+        'twinlink_active_room',
+        normalizeRoomCode(activeRoomCode)
+      );
+      localStorage.setItem(
+        LAST_FOCUSED_ROOM_KEY,
+        JSON.stringify({ roomCode: normalizeRoomCode(activeRoomCode), windowId, timestamp: Date.now() })
+      );
+    } catch {}
+  }, [activeRoomCode]);
 
   // TwinLink Handlers
   const handleJoinTwinLinkRoom = (code: string) => {
@@ -60,6 +127,15 @@ export default function App() {
     setDownloadTarget(null);
     try {
       localStorage.setItem('twinlink_active_room', normalized);
+      let windowId = sessionStorage.getItem(WINDOW_ID_KEY) || '';
+      if (!windowId) {
+        windowId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(WINDOW_ID_KEY, windowId);
+      }
+      localStorage.setItem(
+        LAST_FOCUSED_ROOM_KEY,
+        JSON.stringify({ roomCode: normalized, windowId, timestamp: Date.now() })
+      );
     } catch {}
 
     // Update URL parameter
@@ -73,6 +149,11 @@ export default function App() {
     setDownloadTarget(null);
     try {
       localStorage.removeItem('twinlink_active_room');
+      const raw = localStorage.getItem(LAST_FOCUSED_ROOM_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (saved?.windowId) {
+        localStorage.removeItem(LAST_FOCUSED_ROOM_KEY);
+      }
     } catch {}
     window.history.pushState({}, '', window.location.pathname);
   };
